@@ -22,6 +22,44 @@ export interface UserAttempt {
   time_taken_seconds: number | null;
 }
 
+export interface AttemptResultDetails {
+  attempt: {
+    id: string;
+    status: string;
+    score: number | null;
+    passed: boolean | null;
+    start_time: string;
+    end_time: string | null;
+    time_taken_seconds: number | null; // Example field
+    // Add other attempt fields as needed
+  };
+  test: {
+    id: string;
+    title: string;
+    passing_score: number | null;
+    total_possible_score?: number; // Example field
+    // Add other test fields as needed
+  };
+  questions_answers: Array<{
+    // Question details
+    q_id: string; // Question UUID
+    test_question_id: string; // test_questions UUID
+    q_content: string;
+    q_type: string; // e.g., 'multiple_choice'
+    correct_answer: string | null; // Can be null if not applicable/shown
+    explanation?: string | null;
+    // Answer details
+    user_answer: string | object | null; // User's submitted answer
+    is_correct: boolean | null; // Null if not graded/applicable
+    points_awarded: number | null;
+    point_value: number; // Max points for the question
+    time_spent_seconds?: number | null;
+    // Add other combined fields as needed
+  }>;
+  feedback?: any; // Optional feedback section
+  recommendations?: any; // Optional recommendations
+}
+
 @Injectable()
 export class TestAttemptsService {
   private readonly logger = new Logger(TestAttemptsService.name);
@@ -389,6 +427,89 @@ export class TestAttemptsService {
       if (error instanceof HttpException) throw error; // Re-throw known HTTP exceptions
       throw new InternalServerErrorException(
         'An unexpected error occurred while saving progress.',
+      );
+    }
+  }
+
+  async getAttemptResultDetails(
+    attemptId: string,
+    user: User,
+  ): Promise<AttemptResultDetails> {
+    this.logger.log(
+      `Fetching result details for attempt ID: ${attemptId}, User ID: ${user.id}`,
+    );
+    if (!this.supabaseClient)
+      throw new InternalServerErrorException('Supabase client not available.');
+    if (!user || !user.id)
+      throw new InternalServerErrorException('User information is missing.');
+
+    try {
+      // Call the Supabase RPC function designed to fetch detailed results
+      // Ensure this RPC function performs necessary joins and authorization checks (e.g., RLS or explicit user ID check)
+      const { data, error } = await this.supabaseClient
+        .rpc('get_attempt_result_details', {
+          input_attempt_id: attemptId,
+          // Optionally pass user ID if RPC needs it for validation beyond RLS
+          // input_user_id: user.id
+        })
+        .single(); // Assuming the RPC returns a single JSON object
+
+      if (error) {
+        this.logger.error(
+          `RPC call get_attempt_result_details failed for attempt ${attemptId}, user ${user.id}: ${error.message}`,
+          error.details,
+        );
+
+        // Handle specific database errors
+        if (
+          error.code === 'PGRST116' ||
+          error.message.includes('AttemptNotFound')
+        ) {
+          // PGRST116 often indicates "response contains 0 rows"
+          throw new NotFoundException(
+            `Test attempt result with ID ${attemptId} not found or access denied.`,
+          );
+        }
+        if (error.message.includes('Forbidden')) {
+          // Check if your RPC raises specific errors
+          throw new ForbiddenException(
+            `You do not have permission to view results for attempt ${attemptId}.`,
+          );
+        }
+
+        // Generic error for other database issues
+        throw new InternalServerErrorException(
+          `Failed to fetch attempt results: ${error.message}`,
+        );
+      }
+
+      if (!data) {
+        // Handle case where RPC succeeded but returned no data (should ideally be caught by error handling above)
+        this.logger.warn(
+          `RPC get_attempt_result_details returned no data for attempt ${attemptId}, user ${user.id}.`,
+        );
+        throw new NotFoundException(
+          `Test attempt result with ID ${attemptId} not found.`,
+        );
+      }
+
+      this.logger.log(
+        `Successfully fetched result details for attempt ID: ${data}`,
+      );
+      // Cast or validate the 'data' against the AttemptResultDetails interface if needed,
+      // otherwise return it directly assuming the RPC returns the correct structure.
+      return data as AttemptResultDetails;
+    } catch (error) {
+      // Catch unexpected errors (network issues, etc.)
+      this.logger.error(
+        `Unexpected error fetching results for attempt ${attemptId}: ${error.message}`,
+        error.stack,
+      );
+      // Re-throw known HTTP exceptions
+      if (error instanceof HttpException) throw error;
+      // Throw a generic server error for unknown issues
+      throw new InternalServerErrorException(
+        'An unexpected error occurred while fetching test results.',
       );
     }
   }

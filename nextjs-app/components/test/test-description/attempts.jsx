@@ -54,7 +54,6 @@ function AttemptStatus({ status, passed }) {
           </Badge>
         );
       } else if (passed === false) {
-        // *** USE OLD STYLE FOR FAILED ***
         return (
           <div className="flex items-center justify-center text-red-600">
             {" "}

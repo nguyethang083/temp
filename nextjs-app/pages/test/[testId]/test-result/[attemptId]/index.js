@@ -1,7 +1,9 @@
+// pages/test/[testId]/test-result/[attemptId].js (or pages/test/[slug]/test-result.js)
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/router";
+
 import TestResultHeader from "@/components/test/test-results/test-result-header";
 import TestResultSummary from "@/components/test/test-results/test-result-summary";
 import TestResultFeedback from "@/components/test/test-results/test-result-feedback";
@@ -11,73 +13,161 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { RefreshCcw, Download, Search, ArrowRight } from "lucide-react";
-import { fetchTestResult } from "@/lib/test-api";
+// Ensure this points to your actual API function file
+import { fetchAttemptResult } from "@/pages/api/test/testService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 
+// Helper function to format duration (add this or import from utils)
+function formatDurationFromSeconds(totalSeconds) {
+  if (totalSeconds === null || totalSeconds === undefined || totalSeconds < 0) {
+    return "N/A";
+  }
+  if (totalSeconds === 0) {
+    return "0s";
+  }
+  const seconds = Math.floor(totalSeconds % 60);
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const minutes = totalMinutes % 60;
+  const hours = Math.floor(totalMinutes / 60);
+  let parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+  return parts.join(" ");
+}
+
 export default function TestResultsPage() {
-  const searchParams = useSearchParams();
-  const testId = searchParams.get("id") || "default";
+  const router = useRouter();
+  // Get dynamic parameters from the query object
+  // Use 'id' or 'testId' depending on your actual filename [id].js vs [testId].js
+  // Use 'slug' if filename is [slug].js
+  const { testId, slug, attemptId } = router.query;
 
   const [testResult, setTestResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // Set initial active tab to "details"
   const [activeTab, setActiveTab] = useState("summary");
 
+  // Fetch data when router is ready and attemptId is available
   useEffect(() => {
-    loadTestResult();
-  }, [testId]);
+    if (router.isReady && attemptId) {
+      loadTestResult(attemptId);
+    } else if (router.isReady && !attemptId) {
+      setError("Attempt ID is missing from the URL.");
+      setLoading(false);
+    }
+  }, [router.isReady, attemptId]);
 
-  const loadTestResult = async () => {
+  // Function to load data based on attemptId
+  const loadTestResult = async (currentAttemptId) => {
     setLoading(true);
     setError(null);
+    setTestResult(null);
+    console.log(`Fetching result for attempt ID: ${currentAttemptId}`);
     try {
-      const result = await fetchTestResult(testId);
-      setTestResult(result);
+      const result = await fetchAttemptResult(currentAttemptId);
+      console.log("Fetched test result:", result); // Log the fetched result
 
-      // If the URL has a query parameter to show details, set the active tab
-      if (searchParams.get("view") === "details") {
-        setActiveTab("details");
+      if (
+        !result ||
+        !result.attempt ||
+        !result.test ||
+        !result.questions_answers
+      ) {
+        // Check if essential parts of the data are missing
+        throw new Error("Incomplete attempt result data received.");
       }
+
+      setTestResult(result);
     } catch (err) {
       console.error("Failed to fetch test result:", err);
-      setError("Failed to load test results. Please try again.");
+      setError(
+        `Failed to load test results for attempt ${currentAttemptId}. Please try again. ${err.message}`
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  // Refresh handler
   const handleRefresh = () => {
-    loadTestResult();
+    if (router.isReady && attemptId) {
+      loadTestResult(attemptId);
+    }
   };
 
+  // Export handler - using data from testResult
   const handleExport = () => {
     if (!testResult) return;
 
-    // Create CSV content
-    const csvContent = `data:text/csv;charset=utf-8,
-Test: ${testResult.title}
-Score: ${testResult.score}%
-Correct Answers: ${testResult.correctAnswers}/${testResult.totalQuestions}
-Time Taken: ${testResult.timeTaken}
-Date: ${new Date(testResult.date).toLocaleDateString()}
-    `;
+    // Extract data safely using optional chaining and nullish coalescing
+    const attemptScore = testResult.attempt?.score ?? null;
+    const totalPossible = testResult.test?.total_possible_score ?? null;
+    const scorePercent =
+      attemptScore !== null && totalPossible !== null && totalPossible > 0
+        ? ((attemptScore / totalPossible) * 100).toFixed(1) + "%"
+        : "N/A";
 
-    // Create download link
+    const correctCount =
+      testResult.questions_answers?.filter((q) => q.is_correct === true)
+        .length ?? "N/A";
+    const totalQ = testResult.questions_answers?.length ?? "N/A";
+    const time = formatDurationFromSeconds(
+      testResult.attempt?.time_taken_seconds
+    );
+    const dateCompleted = testResult.attempt?.end_time
+      ? new Date(testResult.attempt.end_time).toLocaleDateString() // Use appropriate locale if needed
+      : "N/A";
+    const testTitle = testResult.test?.title ?? "N/A";
+
+    // Basic CSV content
+    let csvContent = `data:text/csv;charset=utf-8,Test: "${testTitle.replace(
+      /"/g,
+      '""'
+    )}"\nScore: ${scorePercent}\nCorrect Answers: ${correctCount}/${totalQ}\nTime Taken: ${time}\nDate: ${dateCompleted}\n\nQuestion No.,Question Content,Your Answer,Correct Answer,Status,Points Awarded,Points Possible,Time Spent (s)\n`;
+
+    // Add question details
+    testResult.questions_answers?.forEach((q, index) => {
+      const qNum = index + 1;
+      const qContent = `"${(q.q_content || "").replace(/"/g, '""')}"`; // Handle quotes
+      const userAnswer = `"${(q.user_answer !== null ? q.user_answer : "")
+        .toString()
+        .replace(/"/g, '""')}"`;
+      const correctAnswer = `"${(q.correct_answer || "").replace(/"/g, '""')}"`;
+      const status =
+        q.is_correct === true
+          ? "Correct"
+          : q.is_correct === false
+          ? "Incorrect"
+          : "Not Graded";
+      const pointsAwarded = q.points_awarded ?? "N/A";
+      const pointsPossible = q.point_value ?? "N/A";
+      const timeSpent = q.time_spent_seconds ?? "N/A";
+      csvContent += `${qNum},${qContent},${userAnswer},${correctAnswer},${status},${pointsAwarded},${pointsPossible},${timeSpent}\n`;
+    });
+
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `test-result-${testId}.csv`);
+    link.setAttribute(
+      "download",
+      `test-result-${attemptId || slug || "export"}.csv`
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  if (loading) {
+  // --- Render Logic ---
+
+  if (!router.isReady || loading) {
     return (
       <div className="p-6">
+        {/* Skeleton Loading */}
         <div className="mb-6">
           <Skeleton className="h-8 w-64 mb-2" />
           <Skeleton className="h-6 w-96" />
@@ -94,6 +184,7 @@ Date: ${new Date(testResult.date).toLocaleDateString()}
   if (error) {
     return (
       <div className="p-6">
+        {/* Error Display */}
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
@@ -106,23 +197,43 @@ Date: ${new Date(testResult.date).toLocaleDateString()}
     );
   }
 
-  if (!testResult) return null;
+  if (!testResult) {
+    return <div className="p-6">No test result data available.</div>;
+  }
 
+  // --- Prepare data for child components ---
+  const attemptScore = testResult.attempt?.score ?? 0; // Default to 0 if null for calculation
+  const totalPossibleScore = testResult.test?.total_possible_score ?? 0; // Default to 0
+  const scorePercentage =
+    totalPossibleScore > 0
+      ? parseFloat(((attemptScore / totalPossibleScore) * 100).toFixed(1))
+      : 0; // Calculate percentage, handle division by zero
+
+  const correctAnswersCount =
+    testResult.questions_answers?.filter((q) => q.is_correct === true).length ??
+    0;
+  const totalQuestionsCount = testResult.questions_answers?.length ?? 0;
+  const timeTakenFormatted = formatDurationFromSeconds(
+    testResult.attempt?.time_taken_seconds
+  );
+
+  // --- Main Return JSX ---
   return (
     <div className="p-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        {/* Use data from testResult */}
         <TestResultHeader
-          title={testResult.title}
-          status={testResult.status}
-          breadcrumbs={testResult.breadcrumbs}
+          title={testResult.test?.title}
+          status={testResult.attempt?.status}
+          passed={testResult.attempt?.passed}
+          // breadcrumbs={...} // Add breadcrumbs if available in testResult
         />
-
         <div className="flex items-center space-x-2 mt-4 md:mt-0">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search results..."
+              placeholder="Search questions..." // Updated placeholder
               className="pl-8 w-[200px]"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -140,7 +251,7 @@ Date: ${new Date(testResult.date).toLocaleDateString()}
             variant="outline"
             size="icon"
             onClick={handleExport}
-            title="Export"
+            title="Export Results"
           >
             <Download className="h-4 w-4" />
           </Button>
@@ -148,32 +259,35 @@ Date: ${new Date(testResult.date).toLocaleDateString()}
       </div>
 
       <Tabs
-        defaultValue="summary"
-        className="mb-6"
+        // Use controlled value and set default via state
+        value={activeTab}
         onValueChange={setActiveTab}
+        className="mb-6"
       >
         <TabsList>
           <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="details">Question Details</TabsTrigger>
         </TabsList>
 
+        {/* Summary Tab */}
         <TabsContent value="summary" className="mt-6">
           <div className="flex flex-col md:flex-row gap-6 mb-8">
-            {/* Left side: Progress chart */}
+            {/* Left: Summary Card */}
             <div className="w-full md:w-1/3">
               <Card>
                 <CardContent className="pt-6">
+                  {/* Pass calculated/formatted props */}
                   <TestResultSummary
-                    score={testResult.score}
-                    correctAnswers={testResult.correctAnswers}
-                    totalQuestions={testResult.totalQuestions}
-                    timeTaken={testResult.timeTaken}
+                    score={scorePercentage}
+                    correctAnswers={correctAnswersCount}
+                    totalQuestions={totalQuestionsCount}
+                    timeTaken={timeTakenFormatted}
                   />
                 </CardContent>
               </Card>
             </div>
 
-            {/* Middle: Statistics */}
+            {/* Middle: Statistics Card */}
             <div className="w-full md:w-1/3">
               <Card className="h-full">
                 <CardContent className="pt-6">
@@ -185,20 +299,17 @@ Date: ${new Date(testResult.date).toLocaleDateString()}
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-gray-600">Correct Answers:</span>
                         <span className="font-medium">
-                          {testResult.correctAnswers} /{" "}
-                          {testResult.totalQuestions}
+                          {correctAnswersCount} / {totalQuestionsCount}
                         </span>
                       </div>
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-gray-600">Accuracy:</span>
-                        <span className="font-medium">
-                          {testResult.score} %
-                        </span>
+                        <span className="font-medium">{scorePercentage}%</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-gray-600">Time Taken:</span>
                         <span className="font-medium">
-                          {testResult.timeTaken}
+                          {timeTakenFormatted}
                         </span>
                       </div>
                     </div>
@@ -207,7 +318,7 @@ Date: ${new Date(testResult.date).toLocaleDateString()}
               </Card>
             </div>
 
-            {/* Right side: Action buttons */}
+            {/* Right: Actions */}
             <div className="w-full md:w-1/3">
               <div className="flex flex-col space-y-4">
                 <Button
@@ -218,11 +329,10 @@ Date: ${new Date(testResult.date).toLocaleDateString()}
                   Review Answers
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
-
                 <Button
                   variant="outline"
                   className="bg-amber-50 hover:bg-amber-100 border-amber-100 text-gray-700 justify-between h-14"
-                  onClick={testResult.actions.retake}
+                  // onClick={testResult.actions.retake}
                 >
                   Retake Test
                   <ArrowRight className="h-4 w-4 ml-2" />
@@ -231,7 +341,7 @@ Date: ${new Date(testResult.date).toLocaleDateString()}
                 <Button
                   variant="outline"
                   className="bg-green-50 hover:bg-green-100 border-green-100 text-gray-700 justify-between h-14"
-                  onClick={testResult.actions.next}
+                  // onClick={testResult.actions.next}
                 >
                   Next Test
                   <ArrowRight className="h-4 w-4 ml-2" />
@@ -240,16 +350,17 @@ Date: ${new Date(testResult.date).toLocaleDateString()}
             </div>
           </div>
 
-          {/* Bottom section: Feedback and Recommendations */}
+          {/* Bottom: Feedback/Recommendations */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
             <Card className="bg-white shadow-sm">
               <CardContent className="pt-6">
+                {/* Use feedback data from testResult */}
                 <TestResultFeedback feedback={testResult.feedback} />
               </CardContent>
             </Card>
-
             <Card className="bg-white shadow-sm">
               <CardContent className="pt-6">
+                {/* Use recommendations data from testResult */}
                 <TestResultFeedback
                   title="Recommendations"
                   feedback={testResult.recommendations}
@@ -260,9 +371,11 @@ Date: ${new Date(testResult.date).toLocaleDateString()}
           </div>
         </TabsContent>
 
+        {/* Details Tab */}
         <TabsContent value="details">
+          {/* Pass the correct array to the table */}
           <TestResultsTable
-            questions={testResult.questions}
+            questions={testResult.questions_answers}
             searchQuery={searchQuery}
           />
         </TabsContent>

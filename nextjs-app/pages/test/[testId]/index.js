@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react"; // Keep useEffect if needed elsewhere, remove useState if not
 import { useRouter } from "next/router";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Play, AlertCircle } from "lucide-react"; // Import AlertCircle
@@ -29,10 +28,9 @@ export default function TestDescription() {
       strict: true,
       locale: "vi",
     });
-    router.push(`/test/${slugifiedTitle}/test-result?attempt_id=${attemptId}`);
+    router.push(`/test/${id}/test-result/${attemptId}`);
   };
 
-  // --- Button Text Logic (Adjust based on statuses from backend if needed) ---
   const getButtonText = (status) => {
     switch (status) {
       case "in_progress":
@@ -123,7 +121,7 @@ export default function TestDescription() {
         <div className="lg:col-span-2 space-y-8">
           {" "}
           {/* Add spacing between elements */}
-          <h1 className="text-3xl font-bold mb-4 font-sora">{test.title}</h1>
+          <h1 className="text-2xl font-bold mb-4 font-sora">{test.title}</h1>
           <div>
             <h2 className="text-xl font-semibold mb-3">Description</h2>
             <div

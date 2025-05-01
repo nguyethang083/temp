@@ -316,8 +316,7 @@ export default function TestDetail() {
       );
       console.log("Test submitted successfully, API Result:", result);
       const finalAttemptId = result?.id || testAttemptId; // Use returned ID if possible
-      const testSlug = slugify(testData?.title || "test");
-      router.push(`/test/${testSlug}/test-result?attempt_id=${finalAttemptId}`); // Verify route
+      router.push(`/test/${testId}/test-result/${finalAttemptId}`); // Verify route
     } catch (error) {
       console.error("Error submitting test:", error);
       alert(

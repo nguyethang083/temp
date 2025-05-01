@@ -16,7 +16,11 @@ import {
 } from '@nestjs/common';
 import { User } from '@supabase/supabase-js';
 import { JwtGuard } from '../../auth/guards/auth.guard';
-import { TestAttemptsService, UserAttempt } from './test-attempts.service';
+import {
+  AttemptResultDetails,
+  TestAttemptsService,
+  UserAttempt,
+} from './test-attempts.service';
 import { GetUser } from '../../auth/decorators/get-user.decorator';
 import {
   AnswerDto,
@@ -93,5 +97,17 @@ export class TestAttemptsController {
       progressData,
       user,
     );
+  }
+
+  @Get(':attemptId/result')
+  async getAttemptResult(
+    @Param('attemptId', ParseUUIDPipe) attemptId: string, // Validate UUID format
+    @GetUser() user: User, // Get the authenticated user
+  ): Promise<AttemptResultDetails> {
+    // Define return type
+    this.logger.log(
+      `Received request for result details for attempt ID: ${attemptId} by user ID: ${user?.id}`,
+    );
+    return this.testAttemptsService.getAttemptResultDetails(attemptId, user);
   }
 }
