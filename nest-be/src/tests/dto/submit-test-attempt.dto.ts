@@ -8,6 +8,8 @@ import {
   IsNumber,
   Min,
   IsEnum,
+  IsInt,
+  IsUUID,
 } from 'class-validator';
 
 // Define the enum for question types
@@ -45,12 +47,15 @@ export class AnswerDto {
   @IsOptional()
   @IsBoolean()
   isMarked?: boolean;
+
+  @IsInt()
+  @IsNotEmpty()
+  timeSpent?: number | null;
 }
 
 export class SubmitTestAttemptDto {
   @IsObject()
   @Transform(({ value }) => {
-    // This handles transformation of each answer entry
     if (typeof value === 'object' && value !== null) {
       const result = {};
       Object.keys(value).forEach((key) => {
@@ -65,4 +70,8 @@ export class SubmitTestAttemptDto {
   @IsNumber()
   @Min(0)
   timeLeft: number;
+
+  @IsUUID()
+  @IsNotEmpty()
+  lastViewedTestQuestionId?: string | null;
 }

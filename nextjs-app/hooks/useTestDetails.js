@@ -1,118 +1,153 @@
-// hooks/useTestDetails.js
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react"; // Added useCallback
 import { fetchWithAuth } from "@/pages/api/helper"; // Ensure correct path
 
 export function useTestDetails(testId) {
   const [test, setTest] = useState(null);
-  // State for attempt status: 'not_started', 'in_progress', 'completed', null (loading), 'error'
   const [attemptStatus, setAttemptStatus] = useState(null);
+  const [attempts, setAttempts] = useState([]); // State for attempts list
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [attemptsError, setAttemptsError] = useState(null); // Specific error for attempts fetch
 
-  useEffect(() => {
-    // Flag to prevent state updates if component unmounts during async ops
-    let isMounted = true;
+  // Use useCallback to memoize the fetch function
+  const loadData = useCallback(async () => {
+    // Use an AbortController to handle component unmounting during fetch
+    const controller = new AbortController();
+    const signal = controller.signal;
 
-    const loadData = async () => {
-      if (!testId || typeof testId !== "string") {
-        // Only reset if component is still mounted
-        if (isMounted) {
-          setLoading(true);
-          setTest(null);
-          setAttemptStatus(null);
-          setError(null);
-        }
-        return; // Wait for a valid ID
+    if (!testId || typeof testId !== "string") {
+      setLoading(false); // Stop loading if no ID
+      setTest(null);
+      setAttemptStatus(null);
+      setAttempts([]);
+      setError(null);
+      setAttemptsError(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setAttemptsError(null); // Reset errors
+    setTest(null); // Reset data on new fetch
+    setAttemptStatus(null);
+    setAttempts([]);
+    console.log(
+      `useTestDetails: Fetching details, status & attempts for ID: ${testId}`
+    );
+
+    try {
+      // --- 1. Fetch Test Details ---
+      console.log(`useTestDetails: Fetching test details for ID: ${testId}`);
+      const fetchedTestData = await fetchWithAuth(`/tests/${testId}`, {
+        signal,
+      });
+      console.log("useTestDetails: Fetched test details:", fetchedTestData);
+      if (!fetchedTestData || typeof fetchedTestData !== "object") {
+        throw new Error("Received invalid data for test details.");
       }
+      setTest(fetchedTestData);
 
-      // Set loading state only if mounted
-      if (isMounted) {
-        setLoading(true);
-        setError(null);
-        setTest(null);
-        setAttemptStatus(null);
+      // --- 2. Fetch Attempt Status ---
+      try {
         console.log(
-          `useTestDetails: Fetching details & status for ID: ${testId}`
+          `useTestDetails: Fetching attempt status for test ID: ${testId}`
+        );
+        const statusData = await fetchWithAuth(`/tests/${testId}/status`, {
+          signal,
+        });
+        if (statusData && statusData.status) {
+          console.log(
+            "useTestDetails: Fetched attempt status:",
+            statusData.status
+          );
+          setAttemptStatus(statusData.status);
+        } else {
+          console.warn(
+            "useTestDetails: Received invalid status data, defaulting to 'not_started'.",
+            statusData
+          );
+          setAttemptStatus("not_started");
+        }
+      } catch (statusError) {
+        // Don't throw here, just log and set status to error
+        console.error(
+          "useTestDetails: Failed to fetch attempt status:",
+          statusError
+        );
+        setAttemptStatus("error");
+        setError((prevError) =>
+          prevError
+            ? `${prevError} Also failed to load attempt status.`
+            : "Could not load attempt status."
         );
       }
 
-      let fetchedTestData = null;
-
+      // --- 3. Fetch Previous Attempts ---
+      // Only fetch attempts if the main test details loaded successfully
       try {
-        // 1. Fetch Test Details (Metadata)
-        fetchedTestData = await fetchWithAuth(`/tests/${testId}`);
-        if (!isMounted) return; // Exit if unmounted during fetch
-
-        console.log("useTestDetails: Fetched test details:", fetchedTestData);
-        if (!fetchedTestData || typeof fetchedTestData !== "object") {
-          throw new Error("Received invalid data for test details.");
-        }
-        setTest(fetchedTestData); // Set test details state
-
-        // 2. Fetch Attempt Status (Now that we have valid test details)
-        try {
-          console.log(
-            `useTestDetails: Fetching attempt status for test ID: ${testId}`
-          );
-          // *** Calls the new backend endpoint ***
-          const statusData = await fetchWithAuth(`/tests/${testId}/status`);
-          if (!isMounted) return; // Exit if unmounted
-
-          if (statusData && statusData.status) {
-            console.log(
-              "useTestDetails: Fetched attempt status:",
-              statusData.status
-            );
-            setAttemptStatus(statusData.status); // Set status state
-          } else {
-            // If endpoint returns empty or invalid data, assume 'not_started'
-            console.warn(
-              "useTestDetails: Received invalid status data, defaulting to 'not_started'.",
-              statusData
-            );
-            setAttemptStatus("not_started");
-          }
-        } catch (statusError) {
-          if (!isMounted) return; // Exit if unmounted
-          console.error(
-            "useTestDetails: Failed to fetch attempt status:",
-            statusError
-          );
-          setAttemptStatus("error"); // Indicate status fetch failed
-          // Optionally add to the main error state or keep separate
-          setError((prevError) =>
-            prevError
-              ? `${prevError} Also failed to load attempt status.`
-              : "Could not load attempt status."
-          );
-        }
-      } catch (err) {
-        if (!isMounted) return; // Exit if unmounted
-        // Error fetching main test details
-        console.error("useTestDetails: Failed to fetch test details:", err);
-        let errorMessage = err.message || "Could not load test details.";
-        if (err.message?.toLowerCase().includes("not found")) {
-          errorMessage = `Test with ID ${testId} not found.`;
-        }
-        setError(errorMessage);
-        setTest(null);
-        setAttemptStatus(null); // Reset status on main error
-      } finally {
-        if (isMounted) {
-          setLoading(false); // Stop loading
-          console.log("useTestDetails: Finished fetching.");
-        }
+        console.log(
+          `useTestDetails: Fetching previous attempts for test ID: ${testId}`
+        );
+        // *** Calls the new backend endpoint ***
+        // Adjust URL if your API prefix is different (e.g., /api/v1)
+        const fetchedAttempts = await fetchWithAuth(
+          `/test-attempts/test/${testId}`,
+          { signal }
+        );
+        console.log(
+          "useTestDetails: Fetched previous attempts:",
+          fetchedAttempts
+        );
+        // Ensure it's an array before setting
+        setAttempts(Array.isArray(fetchedAttempts) ? fetchedAttempts : []);
+      } catch (attError) {
+        // Log specific error for attempts, don't overwrite main error unless desired
+        console.error(
+          "useTestDetails: Failed to fetch previous attempts:",
+          attError
+        );
+        setAttemptsError("Could not load previous attempts."); // Set specific attempts error
+        setAttempts([]); // Ensure attempts is empty on error
       }
-    };
+    } catch (err) {
+      // Handle errors from fetching Test Details primarily
+      if (err.name === "AbortError") {
+        console.log("useTestDetails: Fetch aborted.");
+        return; // Don't update state if fetch was aborted
+      }
+      console.error("useTestDetails: Failed during data loading:", err);
+      let errorMessage = err.message || "Could not load test data.";
+      // Example: Check for specific error types if your fetchWithAuth throws them
+      if (
+        err.status === 404 ||
+        err.message?.toLowerCase().includes("not found")
+      ) {
+        errorMessage = `Test with ID ${testId} not found.`;
+      }
+      setError(errorMessage);
+      setTest(null); // Clear data on error
+      setAttemptStatus(null);
+      setAttempts([]);
+    } finally {
+      // Check if the signal was aborted before setting loading to false
+      if (!signal.aborted) {
+        setLoading(false); // Stop loading
+        console.log("useTestDetails: Finished fetching attempts.");
+      }
+    }
+  }, [testId]); // Dependency array includes testId
 
+  useEffect(() => {
     loadData();
 
-    // Cleanup function to set isMounted to false when the component unmounts
+    // Cleanup function to abort fetch if component unmounts or testId changes
+    const controller = new AbortController(); // Create controller instance locally for cleanup reference
     return () => {
-      isMounted = false;
+      console.log("useTestDetails: Cleanup, aborting potential fetch.");
+      controller.abort(); // Abort any ongoing fetch associated with this effect instance
     };
-  }, [testId]); // Rerun only if testId changes
+  }, [loadData]); // Run effect when loadData function changes (due to testId change)
 
-  // Return the state variables including attemptStatus
-  return { test, attemptStatus, loading, error };
+  // Return all relevant states
+  return { test, attemptStatus, attempts, loading, error, attemptsError };
 }

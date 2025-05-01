@@ -11,6 +11,16 @@ import { SupabaseService } from '../../supabase/supabase.service';
 import { User } from '@supabase/supabase-js';
 import { SubmitTestAttemptDto } from '../dto/submit-test-attempt.dto';
 
+export interface UserAttempt {
+  id: string;
+  status: string; // Adjust type if you have an enum imported
+  score: number | null;
+  passed: boolean | null;
+  start_time: string; // ISO String
+  end_time: string | null; // ISO String or null
+  time_taken_seconds: number | null;
+}
+
 @Injectable()
 export class TestAttemptsService {
   private readonly logger = new Logger(TestAttemptsService.name);
@@ -125,9 +135,14 @@ export class TestAttemptsService {
         answerDto.longAnswer !== null
       )
         userAnswer = answerDto.longAnswer;
+
+      const timeSpent = answerDto.timeSpent;
       // Add drawing logic if needed
 
-      formattedAnswers[testQuestionId] = { userAnswer: userAnswer };
+      formattedAnswers[testQuestionId] = {
+        userAnswer: userAnswer,
+        timeSpent: timeSpent,
+      };
     }
 
     try {
@@ -138,6 +153,8 @@ export class TestAttemptsService {
           input_user_id: user.id,
           input_answers: formattedAnswers, // Pass the formatted JSON
           input_time_left: submissionData.timeLeft,
+          input_last_viewed_test_question_id:
+            submissionData.lastViewedTestQuestionId,
         },
       );
 
@@ -179,6 +196,55 @@ export class TestAttemptsService {
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException(
         'An unexpected error occurred while submitting the test.',
+      );
+    }
+  }
+  async getUserAttemptsForTest(
+    testId: string,
+    user: User,
+  ): Promise<UserAttempt[]> {
+    this.logger.log(
+      `Calling RPC get_user_attempts_for_test for test ID: ${testId}, User ID: ${user.id}`,
+    );
+    if (!this.supabaseClient)
+      throw new InternalServerErrorException('Supabase client not available.');
+    if (!user || !user.id)
+      throw new InternalServerErrorException('User information is missing.');
+
+    try {
+      const { data, error } = await this.supabaseClient.rpc(
+        'get_user_attempts_for_test', // Name of the SQL function
+        {
+          input_test_id: testId,
+          input_user_id: user.id,
+        },
+      );
+
+      if (error) {
+        this.logger.error(
+          `RPC call get_user_attempts_for_test failed for test ${testId}, user ${user.id}: ${error.message}`,
+          error.details,
+        );
+        // Handle potential errors - add specific checks if needed (e.g., permission denied)
+        throw new InternalServerErrorException(
+          `Failed to retrieve attempts: ${error.message}`,
+        );
+      }
+
+      this.logger.log(
+        `Successfully executed get_user_attempts_for_test for test ${testId}. Found ${data?.length ?? 0} attempts.`,
+      );
+
+      // data should be an array of attempts matching the UserAttempt interface
+      return data || []; // Return data or an empty array if data is null/undefined
+    } catch (error) {
+      this.logger.error(
+        `Unexpected error calling RPC get_user_attempts_for_test for test ${testId}: ${error.message}`,
+        error.stack,
+      );
+      if (error instanceof HttpException) throw error; // Re-throw known HTTP exceptions
+      throw new InternalServerErrorException(
+        'An unexpected error occurred while retrieving previous attempts.',
       );
     }
   }

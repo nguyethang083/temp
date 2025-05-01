@@ -11,12 +11,13 @@ import {
   Req,
   UsePipes,
   ValidationPipe,
+  Get,
 } from '@nestjs/common';
 import { User } from '@supabase/supabase-js';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { JwtGuard } from '../../auth/guards/auth.guard';
-import { TestAttemptsService } from './test-attempts.service';
+import { TestAttemptsService, UserAttempt } from './test-attempts.service';
 import { GetUser } from '../../auth/decorators/get-user.decorator';
 import {
   AnswerDto,
@@ -29,21 +30,6 @@ export class TestAttemptsController {
   private readonly logger = new Logger(TestAttemptsController.name);
 
   constructor(private readonly testAttemptsService: TestAttemptsService) {}
-
-  // @Post(':id/attempts')
-  // async createTestAttempt(
-  //   @Param('id', ParseUUIDPipe) testId: string,
-  //   @GetUser() user: User,
-  // ) {
-  //   this.logger.log(
-  //     `Received request to create test attempt for test ID: ${testId} by user ID: ${user?.id}`,
-  //   );
-  //   if (!user) {
-  //     this.logger.error('User object not found in request despite AuthGuard.');
-  //     throw new InternalServerErrorException('User authentication failed.');
-  //   }
-  //   return this.testsService.createTestAttempt(testId, user);
-  // }
 
   @Post(':attemptId/submit')
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true })) // Apply the pipe!
@@ -71,6 +57,29 @@ export class TestAttemptsController {
       submissionData,
       user,
     );
+  }
+
+  @Get('test/:testId') // Route: GET /test-attempts/test/{testId}
+  async getUserAttemptsForTest(
+    @Param('testId', ParseUUIDPipe) testId: string, // Get testId from URL
+    @GetUser() user: User, // Get authenticated user
+  ): Promise<UserAttempt[]> {
+    // Define return type
+    this.logger.log(
+      `Request received for previous attempts for test ID: ${testId} by user ID: ${user?.id}`,
+    );
+
+    if (!user) {
+      this.logger.error('User object not found in request.');
+      throw new InternalServerErrorException('User authentication failed.');
+    }
+
+    // Call the service method
+    const attempts = await this.testAttemptsService.getUserAttemptsForTest(
+      testId,
+      user,
+    );
+    return attempts;
   }
 
   // TODO: Add POST /test-attempts/:attemptId/save-progress endpoint here later

@@ -104,6 +104,8 @@ export default function TestDetail() {
   } = useTestAnswers();
   const { initializeAnswers } = answerHandlers; // Destructure for clarity
 
+  const { handleQuestionChange } = answerHandlers;
+
   // ========================================================================
   // *** FIXED: Initialize answers when attempt data (answers AND questions) is loaded ***
   // ========================================================================
@@ -144,12 +146,6 @@ export default function TestDetail() {
   const [timeLeft, setTimeLeft] = useState(null);
 
   useEffect(() => {
-    console.log("Timer debug - initialRemainingTime:", initialRemainingTime);
-    console.log("Timer debug - testData:", testData);
-    console.log("Timer debug - timeLimitMinutes:", testData?.timeLimitMinutes);
-    console.log("Timer debug - type:", typeof testData?.timeLimitMinutes);
-    console.log("Timer debug - calculation:", testData?.timeLimitMinutes * 60);
-
     if (initialRemainingTime !== undefined && initialRemainingTime !== null) {
       console.log("Setting timer from attempt data:", initialRemainingTime);
       setTimeLeft(initialRemainingTime);
@@ -191,6 +187,28 @@ export default function TestDetail() {
     [questions, currentQuestionIndex]
   );
   const currentTestQuestionId = currentQuestionData?.testQuestionId;
+
+  // Effect to notify the answers hook when the question changes
+  useEffect(() => {
+    // Only call the handler if the ID is valid (not null/undefined)
+    // This prevents issues during initial load or if data is momentarily missing
+    if (currentTestQuestionId) {
+      console.log(
+        `TestDetail: Question changed to ${currentTestQuestionId}. Notifying useTestAnswers.`
+      );
+      handleQuestionChange(currentTestQuestionId);
+    } else {
+      console.log(
+        `TestDetail: Current question ID is invalid (${currentTestQuestionId}). Not calling handleQuestionChange.`
+      );
+    }
+
+    // Optional cleanup: If the component unmounts while a timer is active
+    // return () => {
+    //   // Call with null to potentially record the time of the last viewed question before unmount
+    //   handleQuestionChange(null);
+    // };
+  }, [currentTestQuestionId, handleQuestionChange]);
 
   const handleMarkCompleteToggle = useCallback(() => {
     if (!currentTestQuestionId) return;
@@ -254,6 +272,7 @@ export default function TestDetail() {
     const submissionPayload = {
       answers: answersPayload,
       timeLeft: countdown,
+      lastViewedTestQuestionId: currentTestQuestionId,
     };
     console.log(
       "Submitting Payload to RPC:",

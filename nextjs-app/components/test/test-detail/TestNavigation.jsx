@@ -113,10 +113,10 @@ export function TestNavigation({
             </DialogHeader>
             <div className="space-y-4 mt-4 max-h-[60vh] overflow-y-auto py-2">
               {/* Grid for question numbers */}
-              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-2">
+              <div className="pl-2 grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-2">
                 {Array.from({ length: totalQuestions }, (_, i) => {
                   const questionNumber = i + 1;
-                  const questionId = questions[i]?.id;
+                  const questionId = questions[i]?.testQuestionId;
                   const isCompleted = !!completedQuestions[questionId];
                   const isMarked = !!markedForReview[questionId];
                   const statusClass = getQuestionStatusClass(
