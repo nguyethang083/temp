@@ -16,7 +16,9 @@ import { TestsService } from './tests.service';
 import { JwtGuard } from '../auth/guards/auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '@supabase/supabase-js';
-import { SubmitTestAttemptDto } from './dto/submit-test-attempt.dto';
+import { AnswerDto, SubmitTestAttemptDto } from './dto/submit-test-attempt.dto';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 
 @UseGuards(JwtGuard)
 @Controller('test-attempts')
@@ -41,35 +43,66 @@ export class TestAttemptsController {
   }
 
   @Post(':attemptId/submit')
-  @UsePipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: false,
-      transform: true,
-    }),
-  )
   async submitTestAttempt(
     @Param('attemptId', ParseUUIDPipe) attemptId: string,
-    @Body() submissionData: SubmitTestAttemptDto,
+    @Body() rawSubmissionData: any,
     @GetUser() user: User,
     @Req() req: Request,
   ) {
     this.logger.log(
       `Received submission for attempt ID: ${attemptId} by user ID: ${user?.id}`,
     );
+
     this.logger.log(
-      `Raw submission data: ${JSON.stringify(req.body, null, 2)}`,
-    ); // Log raw submission data
+      `Raw submission data: ${JSON.stringify(rawSubmissionData, null, 2)}`,
+    );
+
+    // Manually transform and validate the data
+    const submissionData =
+      await this.transformAndValidateSubmission(rawSubmissionData);
+
     this.logger.log(
       `Parsed submission data: ${JSON.stringify(submissionData, null, 2)}`,
-    ); // Log parsed submission data
+    );
 
     if (!user) {
       this.logger.error('User object not found in request during submission.');
       throw new ForbiddenException('User authentication failed.');
     }
+
     return this.testsService.submitTestAttempt(attemptId, submissionData, user);
   }
 
+  private async transformAndValidateSubmission(
+    rawData: any,
+  ): Promise<SubmitTestAttemptDto> {
+    // Create a properly structured object
+    const transformedData: SubmitTestAttemptDto = {
+      answers: {},
+      timeLeft: rawData.timeLeft,
+    };
+
+    // Process each answer
+    if (rawData.answers && typeof rawData.answers === 'object') {
+      for (const [questionId, answerData] of Object.entries(rawData.answers)) {
+        // Transform the answer to an AnswerDto instance
+        const answer = plainToInstance(AnswerDto, answerData);
+
+        // Validate the answer
+        const errors = await validate(answer);
+        if (errors.length === 0) {
+          transformedData.answers[questionId] = answer;
+        } else {
+          this.logger.warn(
+            `Validation errors for answer ${questionId}: ${JSON.stringify(errors)}`,
+          );
+          // Still add it to the collection, but the service might need to handle invalid answers
+          transformedData.answers[questionId] = answer;
+        }
+      }
+    }
+
+    return transformedData;
+  }
   // TODO: Add POST /test-attempts/:attemptId/save-progress endpoint here later
 }

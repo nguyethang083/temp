@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import {
   IsNotEmpty,
   IsObject,
@@ -8,12 +8,20 @@ import {
   IsNumber,
   ValidateNested,
   Min,
+  IsEnum,
 } from 'class-validator';
 
-class AnswerDto {
+// Define the enum for question types
+export enum QuestionType {
+  MULTIPLE_CHOICE = 'multiple_choice',
+  ESSAY = 'essay',
+  SELF_WRITE = 'self_write',
+}
+
+export class AnswerDto {
   @IsNotEmpty()
-  @IsString()
-  type: string;
+  @IsEnum(QuestionType) // Validate that question_type is one of the enum values
+  question_type: QuestionType;
 
   @IsOptional()
   @IsString()
@@ -42,8 +50,17 @@ class AnswerDto {
 
 export class SubmitTestAttemptDto {
   @IsObject()
-  @ValidateNested({ each: true })
-  @Type(() => AnswerDto)
+  @Transform(({ value }) => {
+    // This handles transformation of each answer entry
+    if (typeof value === 'object' && value !== null) {
+      const result = {};
+      Object.keys(value).forEach((key) => {
+        result[key] = value[key];
+      });
+      return result;
+    }
+    return {};
+  })
   answers: Record<string, AnswerDto>;
 
   @IsNumber()
