@@ -1,73 +1,118 @@
+// hooks/useTestDetails.js
 import { useState, useEffect } from "react";
-// Ensure this path is correct for your project structure
-import { fetchWithAuth } from "@/pages/api/helper";
+import { fetchWithAuth } from "@/pages/api/helper"; // Ensure correct path
 
-/**
- * Custom hook to fetch detailed metadata for a single test.
- * @param {string | undefined | null} testId - The ID of the test to fetch.
- * @returns {{ test: object | null, loading: boolean, error: string | null }}
- */
 export function useTestDetails(testId) {
-  const [test, setTest] = useState(null); // State for the detailed test metadata
+  const [test, setTest] = useState(null);
+  // State for attempt status: 'not_started', 'in_progress', 'completed', null (loading), 'error'
+  const [attemptStatus, setAttemptStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Function to fetch the test details
-    const loadTestDetails = async () => {
-      // Don't fetch if ID is not valid or available yet
+    // Flag to prevent state updates if component unmounts during async ops
+    let isMounted = true;
+
+    const loadData = async () => {
       if (!testId || typeof testId !== "string") {
-        console.log(
-          "useTestDetails: Test ID is not valid or available yet.",
-          testId
-        );
-        // Keep loading true until a valid ID is processed or an error occurs.
-        // If the ID never becomes valid, it will just stay loading unless handled elsewhere.
-        // Consider adding a timeout or specific error if ID remains invalid.
-        // For now, we just return and wait for a valid ID.
-        setLoading(true); // Ensure loading remains true if no ID
-        return;
+        // Only reset if component is still mounted
+        if (isMounted) {
+          setLoading(true);
+          setTest(null);
+          setAttemptStatus(null);
+          setError(null);
+        }
+        return; // Wait for a valid ID
       }
 
-      setLoading(true); // Set loading true when starting fetch with a valid ID
-      setError(null);
-      console.log(
-        `useTestDetails: Attempting to fetch test details for ID: ${testId}`
-      );
+      // Set loading state only if mounted
+      if (isMounted) {
+        setLoading(true);
+        setError(null);
+        setTest(null);
+        setAttemptStatus(null);
+        console.log(
+          `useTestDetails: Fetching details & status for ID: ${testId}`
+        );
+      }
+
+      let fetchedTestData = null;
 
       try {
-        // Fetch test details (metadata only) from the backend API
-        const fetchedTestData = await fetchWithAuth(`/tests/${testId}`);
-        console.log(
-          "useTestDetails: Fetched test details data:",
-          fetchedTestData
-        );
+        // 1. Fetch Test Details (Metadata)
+        fetchedTestData = await fetchWithAuth(`/tests/${testId}`);
+        if (!isMounted) return; // Exit if unmounted during fetch
 
+        console.log("useTestDetails: Fetched test details:", fetchedTestData);
         if (!fetchedTestData || typeof fetchedTestData !== "object") {
-          // Handle cases where data is null or not an object after a successful fetch
-          throw new Error("Received invalid or empty data for test details.");
+          throw new Error("Received invalid data for test details.");
         }
+        setTest(fetchedTestData); // Set test details state
 
-        setTest(fetchedTestData); // Set the detailed test metadata
+        // 2. Fetch Attempt Status (Now that we have valid test details)
+        try {
+          console.log(
+            `useTestDetails: Fetching attempt status for test ID: ${testId}`
+          );
+          // *** Calls the new backend endpoint ***
+          const statusData = await fetchWithAuth(`/tests/${testId}/status`);
+          if (!isMounted) return; // Exit if unmounted
+
+          if (statusData && statusData.status) {
+            console.log(
+              "useTestDetails: Fetched attempt status:",
+              statusData.status
+            );
+            setAttemptStatus(statusData.status); // Set status state
+          } else {
+            // If endpoint returns empty or invalid data, assume 'not_started'
+            console.warn(
+              "useTestDetails: Received invalid status data, defaulting to 'not_started'.",
+              statusData
+            );
+            setAttemptStatus("not_started");
+          }
+        } catch (statusError) {
+          if (!isMounted) return; // Exit if unmounted
+          console.error(
+            "useTestDetails: Failed to fetch attempt status:",
+            statusError
+          );
+          setAttemptStatus("error"); // Indicate status fetch failed
+          // Optionally add to the main error state or keep separate
+          setError((prevError) =>
+            prevError
+              ? `${prevError} Also failed to load attempt status.`
+              : "Could not load attempt status."
+          );
+        }
       } catch (err) {
+        if (!isMounted) return; // Exit if unmounted
+        // Error fetching main test details
         console.error("useTestDetails: Failed to fetch test details:", err);
         let errorMessage = err.message || "Could not load test details.";
-        // Handle specific errors like 404 Not Found if needed
         if (err.message?.toLowerCase().includes("not found")) {
           errorMessage = `Test with ID ${testId} not found.`;
         }
         setError(errorMessage);
+        setTest(null);
+        setAttemptStatus(null); // Reset status on main error
       } finally {
-        setLoading(false); // Stop loading regardless of success or error
-        console.log("useTestDetails: Finished fetching test details.");
+        if (isMounted) {
+          setLoading(false); // Stop loading
+          console.log("useTestDetails: Finished fetching.");
+        }
       }
     };
 
-    loadTestDetails();
+    loadData();
 
-    // No cleanup needed here unless there were subscriptions
-  }, [testId]); // Rerun the effect ONLY if the testId changes
+    // Cleanup function to set isMounted to false when the component unmounts
+    return () => {
+      isMounted = false;
+    };
+  }, [testId]); // Rerun only if testId changes
 
-  // Return the state variables
-  return { test, loading, error };
+  // Return the state variables including attemptStatus
+  return { test, attemptStatus, loading, error };
 }

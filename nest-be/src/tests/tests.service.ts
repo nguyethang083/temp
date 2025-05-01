@@ -1,6 +1,4 @@
 import {
-  ConflictException,
-  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -8,9 +6,10 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { FindAllTestsQueryDto } from './dto/find-all-tests-query.dto';
-import { User } from '@supabase/supabase-js';
-import { SubmitTestAttemptDto } from './dto/submit-test-attempt.dto';
-import { AttemptStatusEnum } from './enums/attempt-status-status.enum';
+import {
+  AttemptStatus,
+  TestAttemptStatusDto,
+} from './dto/test-attempt-status.dto';
 
 @Injectable()
 export class TestsService {
@@ -251,338 +250,103 @@ export class TestsService {
       );
     }
   }
-
-  /**
-   * Creates a new test attempt record for a given user and test.
-   * Checks if an 'in_progress' attempt already exists for the user/test.
-   * @param {string} testId - The UUID of the test.
-   * @param {User} user - The authenticated Supabase user object (from AuthGuard).
-   * @returns {Promise<any>} The newly created or existing 'in_progress' test attempt object.
-   * @throws {NotFoundException} If the test is not found or inactive.
-   * @throws {ConflictException} If creating attempt fails due to constraints.
-   * @throws {InternalServerErrorException} For other errors.
-   */
-  async createTestAttempt(testId: string, user: User) {
+  async getTestAttemptStatus(
+    testId: string,
+    userId: string,
+  ): Promise<TestAttemptStatusDto> {
     this.logger.log(
-      `Attempting to create/find test attempt for test ID: ${testId}, User ID: ${user.id}`,
+      `Workspaceing attempt status (simplified) for test ${testId}, user ${userId}`,
     );
+
+    // 1. Get the Supabase Client (assuming it's initialized in constructor)
+    // No need to re-assign if `this.supabaseClient` is correctly set in constructor
     if (!this.supabaseClient) {
-      this.logger.error('createTestAttempt: supabaseClient is not available!');
-      throw new InternalServerErrorException('Supabase client not available.');
-    }
-    if (!user || !user.id) {
       this.logger.error(
-        'createTestAttempt: User object or user ID is missing.',
+        'getTestAttemptStatus: supabaseClient is not available!',
       );
-      throw new InternalServerErrorException('User information is missing.');
+      throw new InternalServerErrorException(
+        'Database client is not configured correctly.',
+      );
+    }
+
+    // 2. Basic Input Validation
+    if (!testId || !userId) {
+      this.logger.warn(
+        `Invalid input for getTestAttemptStatus: testId or userId missing.`,
+      );
+      // Consider throwing BadRequestException from '@nestjs/common' instead
+      throw new InternalServerErrorException(
+        'Required identifiers are missing.',
+      );
     }
 
     try {
-      // 1. Verify the test exists and is active (optional, but good practice)
-      const { data: testData, error: testCheckError } =
-        await this.supabaseClient
-          .from('tests')
-          .select('id, is_active, time_limit_minutes') // Select needed fields
-          .eq('id', testId)
-          .single();
+      // 3. Perform the Supabase Query
+      const { data, error } = await this.supabaseClient
+        .from('test_attempts') // Your table name
+        .select('status') // Column you need
+        .eq('test_id', testId) // Filter 1
+        .eq('user_id', userId) // Filter 2
+        .order('start_time', { ascending: false }) // Latest first
+        .limit(1) // Only the latest
+        .maybeSingle(); // Get one record or null
 
-      if (testCheckError || !testData) {
-        this.logger.warn(
-          `Test ID ${testId} not found or error during check for attempt creation.`,
-        );
-        throw new NotFoundException(`Test with ID ${testId} not found.`);
-      }
-      if (!testData.is_active) {
-        this.logger.warn(
-          `Attempt to create attempt for inactive test ID ${testId}.`,
-        );
-        throw new NotFoundException(
-          `Test with ID ${testId} is not currently active.`,
-        );
-      }
-
-      // 2. Check for existing 'in_progress' attempt for this user and test
-      const { data: existingAttempt, error: existingCheckError } =
-        await this.supabaseClient
-          .from('test_attempts')
-          .select('*') // Select all columns of the attempt
-          .eq('test_id', testId)
-          .eq('user_id', user.id)
-          .eq('status', 'in_progress') // Look specifically for 'in_progress'
-          .maybeSingle(); // There should be at most one
-
-      if (existingCheckError) {
+      // 4. Handle Potential Supabase Errors
+      if (error) {
+        // Log the database error minimally
         this.logger.error(
-          `Error checking for existing attempts for test ${testId}, user ${user.id}: ${existingCheckError.message}`,
-          existingCheckError.stack,
+          `Supabase query failed in getTestAttemptStatus: ${error.message} (Code: ${error.code})`,
         );
+        // Throw a generic server error for the client
         throw new InternalServerErrorException(
-          'Could not check for existing test attempts.',
+          'Could not retrieve test status due to a database error.',
         );
       }
 
-      if (existingAttempt) {
-        this.logger.log(
-          `Found existing 'in_progress' attempt ID ${existingAttempt.id} for test ${testId}, user ${user.id}. Returning existing.`,
-        );
-        // TODO: Potentially update remaining_time_seconds based on start_time if resuming
-        return existingAttempt;
-      }
-
-      // 3. Create a new attempt if none in progress
-      this.logger.log(
-        `No 'in_progress' attempt found. Creating new attempt for test ${testId}, user ${user.id}.`,
-      );
-      const initialRemainingTime = testData.time_limit_minutes
-        ? testData.time_limit_minutes * 60
-        : null;
-
-      const { data: newAttempt, error: insertError } = await this.supabaseClient
-        .from('test_attempts')
-        .insert({
-          test_id: testId,
-          user_id: user.id,
-          status: 'in_progress', // Initial status
-          start_time: new Date().toISOString(), // Record start time
-          remaining_time_seconds: initialRemainingTime, // Set initial remaining time
-          // score, end_time, passed will be null initially
-        })
-        .select() // Select the newly inserted row
-        .single(); // Expect exactly one row back
-
-      if (insertError) {
-        this.logger.error(
-          `Error inserting new test attempt for test ${testId}, user ${user.id}: ${insertError.message}`,
-          insertError.stack,
-        );
-        // Handle potential constraint violations (e.g., duplicate attempt if logic flawed)
-        if (insertError.code === '23505') {
-          // PostgreSQL unique violation code
-          throw new ConflictException(
-            'Failed to create test attempt due to a conflict. Please try again.',
+      // 5. Determine Status Based on Result
+      let status: AttemptStatus;
+      if (data) {
+        // Record found - check its status
+        const dbStatus = data.status;
+        if (dbStatus === 'in_progress' || dbStatus === 'completed') {
+          status = dbStatus;
+        } else {
+          // Handle unexpected status from DB
+          this.logger.warn(
+            `Unexpected status "${dbStatus}" found for test ${testId}, user ${userId}. Defaulting to 'completed'.`,
           );
+          status = 'completed'; // Default for safety, could be 'not_started'
         }
-        throw new InternalServerErrorException(
-          'Could not create new test attempt.',
-        );
+      } else {
+        // No record found - user hasn't started this test
+        status = 'not_started';
       }
 
       this.logger.log(
-        `Successfully created new test attempt ID ${newAttempt.id} for test ${testId}, user ${user.id}.`,
+        `Determined status: ${status} for test ${testId}, user ${userId}`,
       );
-      return newAttempt;
-    } catch (error) {
+      // 6. Return the result
+      return { status };
+    } catch (err) {
+      // 7. Catch Unexpected Runtime Errors (could be the thrown InternalServerErrorException or others)
       this.logger.error(
-        `Unexpected error in createTestAttempt for test ID ${testId}, user ${user.id}: ${error.message}`,
-        error.stack,
+        `Unexpected error in getTestAttemptStatus catch block for test ${testId}: ${err.message || err}`,
+        // Avoid err.stack here unless you check 'err instanceof Error' first
+        // Logging the 'err' object itself is generally safe
+        err,
       );
-      // Re-throw specific exceptions
+
+      // Re-throw specific known errors if needed, otherwise wrap
       if (
-        error instanceof NotFoundException ||
-        error instanceof ConflictException ||
-        error instanceof InternalServerErrorException
-      )
-        throw error;
+        err instanceof InternalServerErrorException ||
+        err instanceof NotFoundException
+      ) {
+        throw err;
+      }
+
+      // Wrap unknown errors in a generic response
       throw new InternalServerErrorException(
-        'An unexpected error occurred while starting the test attempt.',
-      );
-    }
-  }
-
-  /**
-   * Processes a test submission: saves answers, grades, updates attempt status.
-   * @param {string} attemptId - The ID of the test attempt being submitted.
-   * @param {SubmitTestAttemptDto} submissionData - The submitted answers and data.
-   * @param {User} user - The authenticated user submitting the test.
-   * @returns {Promise<any>} The updated test attempt object with score and status.
-   */
-  async submitTestAttempt(
-    attemptId: string,
-    submissionData: SubmitTestAttemptDto,
-    user: User,
-  ): Promise<any> {
-    this.logger.log(
-      `Processing submission for attempt ID: ${attemptId}, User ID: ${user.id}`,
-    );
-    if (!this.supabaseClient)
-      throw new InternalServerErrorException('Supabase client not available.');
-    if (!user || !user.id)
-      throw new InternalServerErrorException('User information is missing.');
-
-    const { answers, timeLeft } = submissionData;
-
-    // IMPORTANT: For atomicity, consider wrapping steps 3-6 in a Supabase Database Function (RPC).
-    // This example uses sequential operations which lack rollback on partial failure.
-
-    try {
-      // 1. Fetch the Test Attempt and associated Test details
-      const { data: attemptData, error: attemptError } =
-        await this.supabaseClient
-          .from('test_attempts')
-          .select(`*, test: tests (id, passing_score)`)
-          .eq('id', attemptId)
-          .single();
-
-      if (attemptError || !attemptData) {
-        this.logger.warn(
-          `Attempt ID ${attemptId} not found or error fetching: ${attemptError?.message}`,
-        );
-        throw new NotFoundException(
-          `Test attempt with ID ${attemptId} not found.`,
-        );
-      }
-
-      // 2. Authorization Check
-      if (attemptData.user_id !== user.id) {
-        throw new ForbiddenException(
-          'You are not authorized to submit this test attempt.',
-        );
-      }
-      if (attemptData.status !== AttemptStatusEnum.InProgress) {
-        // Use Enum
-        throw new ForbiddenException(
-          `This test attempt cannot be submitted (status: ${attemptData.status}).`,
-        );
-      }
-
-      // 3. Fetch Correct Answers and Point Values
-      const questionIds = Object.keys(answers);
-      if (questionIds.length === 0) {
-        this.logger.warn(`Attempt ${attemptId} submitted with no answers.`);
-        // Handle this case - maybe score 0?
-      }
-
-      // Fetch question details needed for grading
-      const { data: questionDetails, error: questionError } =
-        await this.supabaseClient
-          .from('questions')
-          .select('id, correct_answer, question_type')
-          .in('id', questionIds);
-
-      if (questionError)
-        throw new InternalServerErrorException(
-          'Could not retrieve question details for grading.',
-        );
-
-      // Fetch point values from junction table
-      const { data: pointValuesData, error: pointsError } =
-        await this.supabaseClient
-          .from('test_questions')
-          .select('question_id, point_value')
-          .eq('test_id', attemptData.test_id)
-          .in('question_id', questionIds);
-
-      if (pointsError)
-        throw new InternalServerErrorException(
-          'Could not retrieve point values for grading.',
-        );
-
-      const correctAnswersMap = new Map(
-        questionDetails.map((q) => [
-          q.id,
-          { answer: q.correct_answer, type: q.question_type },
-        ]),
-      );
-      const pointsMap = new Map(
-        pointValuesData.map((pv) => [pv.question_id, pv.point_value]),
-      );
-
-      // 4. Grade Answers & Prepare attempt_answers records (Simplified - No Insert Here)
-      let totalScore = 0;
-      // const attemptAnswerRecords = []; // If inserting answers later
-
-      for (const questionId in answers) {
-        const userAnswerData = answers[questionId];
-        const correctAnswerData = correctAnswersMap.get(questionId);
-        const points = pointsMap.get(questionId) || 0;
-        let isCorrect: boolean | null = false; // Default to false, null for manual grading
-
-        if (correctAnswerData) {
-          switch (
-            (correctAnswerData as { answer: string; type: string }).type
-          ) {
-            case 'multiple_choice':
-              isCorrect =
-                userAnswerData.mcAnswer?.toUpperCase() ===
-                (correctAnswerData as { answer: string }).answer?.toUpperCase();
-              break;
-            case 'short_answer':
-              isCorrect =
-                userAnswerData.shortAnswer?.trim().toLowerCase() ===
-                (correctAnswerData as { answer: string }).answer
-                  ?.trim()
-                  .toLowerCase();
-              break;
-            case 'self_write':
-            case 'essay':
-              isCorrect = null; // Requires manual grading
-              break;
-            // Add 'drawing' case if applicable
-          }
-          if (isCorrect === true) totalScore += points as number;
-        }
-        // TODO: Prepare record for attemptAnswerRecords if inserting later
-      }
-
-      // 5. Determine Final Status
-      // Check if any question requires manual grading
-      const needsManualGrading = questionDetails.some(
-        (q) =>
-          ['self_write', 'essay'].includes(q.question_type) &&
-          questionIds.includes(q.id),
-      );
-      const finalStatus: AttemptStatusEnum = needsManualGrading
-        ? AttemptStatusEnum.Completed
-        : AttemptStatusEnum.Graded; // Use 'Graded' if auto-graded, 'Completed' otherwise
-      const passingScore = attemptData.test?.passing_score ?? null;
-      const passed =
-        passingScore !== null && finalStatus === AttemptStatusEnum.Graded
-          ? totalScore >= passingScore
-          : null; // Can only determine pass/fail if auto-graded
-
-      // 6. Update the Test Attempt Record
-      const { data: updatedAttempt, error: updateError } =
-        await this.supabaseClient
-          .from('test_attempts')
-          .update({
-            score: finalStatus === AttemptStatusEnum.Graded ? totalScore : null, // Only set score if fully auto-graded
-            status: finalStatus,
-            passed: passed,
-            end_time: new Date().toISOString(),
-            // remaining_time_seconds: timeLeft // Update remaining time
-          })
-          .eq('id', attemptId)
-          .select()
-          .single();
-
-      if (updateError) {
-        this.logger.error(
-          `Error updating test attempt ${attemptId}: ${updateError.message}`,
-          updateError.stack,
-        );
-        throw new InternalServerErrorException(
-          'Could not finalize test attempt.',
-        );
-      }
-
-      this.logger.log(
-        `Successfully processed submission for attempt ID: ${attemptId}. Status: ${finalStatus}, Score: ${totalScore}, Passed: ${passed}`,
-      );
-      return updatedAttempt;
-    } catch (error) {
-      this.logger.error(
-        `Unexpected error processing submission for attempt ${attemptId}: ${error.message}`,
-        error.stack,
-      );
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ForbiddenException ||
-        error instanceof ConflictException ||
-        error instanceof InternalServerErrorException
-      )
-        throw error;
-      throw new InternalServerErrorException(
-        'An unexpected error occurred while submitting the test.',
+        'An unexpected server error occurred while checking the test status.',
       );
     }
   }

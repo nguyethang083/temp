@@ -21,6 +21,11 @@ export function AnswerInput({
   onLongAnswerChange,
   parseLatex, // Receive the parser function as a prop
 }) {
+  console.log("--- AnswerInput Props ---");
+  console.log("questionContent:", JSON.stringify(questionContent, null, 2)); // Log the crucial content object
+  console.log("multipleChoiceAnswer:", multipleChoiceAnswer);
+  console.log("shortAnswer:", shortAnswer);
+  console.log("longAnswer:", longAnswer);
   const questionId = questionContent?.id;
 
   if (!questionContent || !questionId) {

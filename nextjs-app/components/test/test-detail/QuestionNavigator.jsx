@@ -39,11 +39,11 @@ export function QuestionNavigator({
       </div>
 
       {/* Grid container - Automatically adjusts height to fit content */}
-      <div className="overflow-y-auto p-1">
+      <div className="overflow-y-auto p-2">
         <div className="grid grid-cols-4 xs:grid-cols-5 sm:grid-cols-6 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-2 pb-1">
           {Array.from({ length: totalQuestions }, (_, i) => {
             const questionNumber = i + 1;
-            const questionId = questions[i]?.id;
+            const questionId = questions[i]?.testQuestionId;
             const isCompleted = !!completedQuestions[questionId];
             const isMarked = !!markedForReview[questionId];
             const statusClass = getQuestionStatusClass(
@@ -58,9 +58,7 @@ export function QuestionNavigator({
                 variant="outline"
                 size="sm"
                 className={`w-10 h-10 relative transition-all p-0 text-xs font-medium border rounded-md text-center cursor-pointer ${statusClass} ${
-                  isCurrent
-                    ? "ring-2 ring-indigo-500 ring-offset-1" // Add ring for current question
-                    : ""
+                  isCurrent ? "ring-2 ring-indigo-500" : ""
                 }`}
                 onClick={() => onNavigate(i)}
                 aria-label={`Go to Question ${questionNumber}. Status: ${
@@ -71,7 +69,7 @@ export function QuestionNavigator({
                 {questionNumber}
                 {isMarked && (
                   <span
-                    className="absolute -top-1.5 -right-1.5 block w-3 h-3 bg-yellow-400 rounded-full border-2 border-white shadow-sm"
+                    className="absolute -top-1.5 -right-1.5 block w-4 h-4 bg-yellow-400 rounded-full border-2 border-white shadow-sm"
                     title="Marked for review"
                   ></span>
                 )}

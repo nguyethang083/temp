@@ -1,4 +1,4 @@
-import { Type, Transform } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import {
   IsNotEmpty,
   IsObject,
@@ -6,7 +6,6 @@ import {
   IsString,
   IsBoolean,
   IsNumber,
-  ValidateNested,
   Min,
   IsEnum,
 } from 'class-validator';

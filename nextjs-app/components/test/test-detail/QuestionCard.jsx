@@ -10,15 +10,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip"; // Adjust path if needed
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"; // Adjust path if needed
+} from "@/components/ui/tooltip";
 import { Lightbulb, CheckCircle2, AlertCircle, HelpCircle } from "lucide-react";
 import { AnswerInput } from "./AnswerInput"; // Adjust path if needed
 import { DrawingArea } from "./DrawingArea"; // Adjust path if needed
@@ -103,7 +95,7 @@ export function QuestionCard({
     return questions[currentQuestionIndex];
   }, [currentQuestionIndex, questions]);
 
-  const currentQuestionId = questionData?.id; // Get the ID of the current question
+  const currentQuestionId = questionData?.testQuestionId; // Get the ID of the current question
   const currentDisplayNumber = currentQuestionIndex + 1; // 1-based for display
 
   // Derive status based on ID
@@ -121,8 +113,19 @@ export function QuestionCard({
 
     // Format options if needed (example assumes object format { A: 'text', ...})
     let formattedOptions = [];
+    // --- Add detailed logs ---
+    console.log(
+      "useMemo: Raw questionData.questionType:",
+      questionData?.questionType
+    );
+    console.log("useMemo: Raw questionData.options:", questionData?.options);
+    console.log(
+      "useMemo: typeof questionData.options:",
+      typeof questionData?.options
+    );
+    // --- End detailed logs ---
     if (
-      questionData.question_type === "multiple_choice" &&
+      questionData.questionType === "multiple_choice" &&
       questionData.options
     ) {
       if (Array.isArray(questionData.options)) {
@@ -138,10 +141,10 @@ export function QuestionCard({
         );
       }
     }
-
+    console.log("questions options", formattedOptions);
     return {
-      id: questionData.id,
-      type: questionData.question_type || "multiple_choice",
+      id: questionData.testQuestionId,
+      type: questionData.questionType || "multiple_choice",
       question: questionData.content || "Question content missing.",
       options: formattedOptions,
       hint: questionData.hint || "",
@@ -175,6 +178,7 @@ export function QuestionCard({
     );
   }
 
+  console.log("QuestionData for Display:", questionContentForDisplay);
   const hasDrawingArea = questionContentForDisplay.type === "drawing";
 
   return (
@@ -301,12 +305,10 @@ export function QuestionCard({
             {/* {questionContentForDisplay.explanation && ( ... Dialog ... )} */}
           </div>
         </div>
-
         {/* Question Text - Parsed for LaTeX */}
         <div className="text-base md:text-lg mb-6 leading-relaxed prose prose-sm sm:prose max-w-none">
           {parseLatex(questionContentForDisplay.question)}
         </div>
-
         {/* Hint Box */}
         {showHint && (
           <div className="bg-blue-50 p-4 rounded-md border border-blue-200 mb-6 animate-in slide-in-from-top-2 duration-300">
@@ -319,7 +321,7 @@ export function QuestionCard({
             </div>
           </div>
         )}
-
+        {/* Explanation Dialog (if needed) */}
         {/* Answer Input Area */}
         <AnswerInput
           // Pass data relevant to the current question
@@ -335,7 +337,6 @@ export function QuestionCard({
           onLongAnswerChange={onLongAnswerChange}
           parseLatex={parseLatex} // Pass down the LaTeX parser
         />
-
         {hasDrawingArea && (
           <DrawingArea
             questionId={currentQuestionId}

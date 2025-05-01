@@ -25,7 +25,7 @@ export async function fetchWithAuth(path, options = {}) {
 
   if (!session) {
     console.warn("No active session found for authenticated request.");
-    throw new Error("Authentication required."); // Or handle appropriately
+    throw new Error("Authentication required.");
   }
 
   const token = session.access_token;
@@ -40,50 +40,43 @@ export async function fetchWithAuth(path, options = {}) {
       ...options.headers, // Allow overriding headers
       Authorization: `Bearer ${token}`, // Add the Bearer token
     },
-    // Add data (request body) if present in options
-    data: options.body || undefined,
-    // Include other Axios config options if needed from 'options'
-    // e.g., params: options.params
+    params: options.params || undefined, // Optional query parameters
+    data: options.body || undefined, // Request body
+    timeout: options.timeout || 10000, // Set a default timeout of 10 seconds
   };
 
   // 3. Make the Axios request
   try {
     console.log(
-      `Making authenticated ${axiosConfig.method} request to: ${backendUrl}${path}`
+      `Making authenticated ${axiosConfig.method} request to: ${axiosConfig.baseURL}${path}`
     );
     const response = await axios(axiosConfig);
 
-    // 4. Return the data from the response on success (Axios puts it in `response.data`)
+    // 4. Return the data from the response on success
     return response.data;
   } catch (error) {
     console.error("API Request Error:", error);
 
-    // Axios throws errors for non-2xx responses.
-    // The error object often contains response details.
+    // Handle Axios errors
     if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
+      // Server responded with a status code outside the 2xx range
       console.error("Error Response Data:", error.response.data);
       console.error("Error Response Status:", error.response.status);
       console.error("Error Response Headers:", error.response.headers);
 
-      // Extract message from backend error response if possible, otherwise use default
       const errorMessage =
         error.response.data?.message ||
         error.message ||
         `Request failed with status ${error.response.status}`;
-      // Throw a new error with a potentially more specific message
       throw new Error(errorMessage);
     } else if (error.request) {
-      // The request was made but no response was received
-      // `error.request` is an instance of XMLHttpRequest in the browser and an instance of
-      // http.ClientRequest in node.js
+      // Request was made but no response received
       console.error("Error Request:", error.request);
       throw new Error(
         "No response received from server. Check network connection or backend status."
       );
     } else {
-      // Something happened in setting up the request that triggered an Error
+      // Other errors (e.g., request setup issues)
       console.error("Error Message:", error.message);
       throw new Error(`Error setting up request: ${error.message}`);
     }

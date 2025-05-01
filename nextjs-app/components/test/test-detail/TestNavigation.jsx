@@ -111,7 +111,7 @@ export function TestNavigation({
                 Review your progress. Click a question number to navigate.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 mt-4 max-h-[60vh] overflow-y-auto pr-2">
+            <div className="space-y-4 mt-4 max-h-[60vh] overflow-y-auto py-2">
               {/* Grid for question numbers */}
               <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 gap-2">
                 {Array.from({ length: totalQuestions }, (_, i) => {

@@ -71,7 +71,7 @@ const SettingsSidebar = ({ isCollapsed /* user */ }) => {
                   } py-2.5 rounded-lg transition-all duration-200 ${
                     // Check if the current path starts with the item's href for active state
                     router.pathname.startsWith(item.href)
-                      ? "bg-indigo-50 text-indigo-600 font-medium shadow-sm" // Added font-medium
+                      ? "bg-indigo-50 text-indigo-600 shadow-sm" // Removed redundant font-medium
                       : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   }`}
                   title={isCollapsed ? item.label : ""} // Add tooltip when collapsed
