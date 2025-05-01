@@ -25,6 +25,7 @@ import { useTestNavigation } from "@/hooks/useTestNavigation";
 // --- Utils & Services ---
 import { formatTime } from "@/utils/timeUtils";
 import { fetchWithAuth } from "@/pages/api/helper"; // Make sure path is correct
+import { useDebouncedCallback } from "use-debounce";
 
 // Utility function (if not imported)
 const slugify = (str, options) => {
@@ -39,14 +40,6 @@ export default function TestDetail() {
   const router = useRouter();
   const { id: testId } = router.query; // Use testId consistently
 
-  // --- Data Fetching ---
-  // Consider removing useTestTakingData if useTestAttempt provides everything needed.
-  // For now, assuming useTestAttempt is the primary source after start/resume.
-  // const {
-  //   testData: initialTestData,
-  //   loading: loadingInitialTestData,
-  //   error: initialTestDataError,
-  // } = useTestTakingData(testId);
   const loadingInitialTestData = false; // Placeholder if hook removed
   const initialTestDataError = null; // Placeholder if hook removed
 
@@ -63,10 +56,8 @@ export default function TestDetail() {
     () => attemptStartData?.questions ?? [],
     [attemptStartData?.questions]
   ); // Memoize questions array
-  console.log("test data:", testData);
   const totalQuestions = questions.length;
   const testAttemptId = attemptStartData?.attempt?.id; // Get attempt ID from response
-  console.log("time limit:", testData?.timeLimitMinutes);
   const initialSavedAnswers = attemptStartData?.savedAnswers; // Get saved answers from response
   const initialRemainingTime = attemptStartData?.attempt?.remainingTimeSeconds; // Get remaining time
   const initialLastViewedId =
@@ -99,80 +90,156 @@ export default function TestDetail() {
     completedQuestions,
     markedForReview,
     savedStatus,
-    handlers: answerHandlers, // Contains initializeAnswers
+    handlers: answerHandlers,
     getAnswersForSubmission,
   } = useTestAnswers();
-  const { initializeAnswers } = answerHandlers; // Destructure for clarity
-
+  const { initializeAnswers } = answerHandlers;
+  const { setSavedStatus } = answerHandlers;
   const { handleQuestionChange } = answerHandlers;
+  const AUTO_SAVE_INTERVAL_MS = 30000; // Save every 30 seconds
+  const [isSaving, setIsSaving] = useState(false);
 
-  // ========================================================================
-  // *** FIXED: Initialize answers when attempt data (answers AND questions) is loaded ***
-  // ========================================================================
+  const currentQuestionData = useMemo(
+    () => questions[currentQuestionIndex],
+    [questions, currentQuestionIndex]
+  );
+  const currentTestQuestionId = currentQuestionData?.testQuestionId;
+
   useEffect(() => {
-    // Check if BOTH initialSavedAnswers object AND questions array are ready
-    // (Ensure questions is a non-empty array as initializeAnswers relies on it)
     if (
       initialSavedAnswers &&
       typeof initialSavedAnswers === "object" &&
       Array.isArray(questions) &&
       questions.length > 0
     ) {
-      console.log(
-        "TestDetail: Calling initializeAnswers with:", // Log before calling
-        initialSavedAnswers,
-        questions // Log both arguments
-      );
-      // Pass BOTH arguments to the hook's initialization function
       initializeAnswers(initialSavedAnswers, questions);
-    } else {
-      // Log if prerequisites aren't met yet
-      console.log(
-        "TestDetail: Waiting for initialSavedAnswers (object) and non-empty questions (array) to initialize answers...",
-        {
-          hasSavedAnswers: !!initialSavedAnswers,
-          hasQuestions: Array.isArray(questions) && questions.length > 0,
-        }
-      );
     }
-    // Add ALL dependencies used in the effect:
-    // initialSavedAnswers, questions, and the initializeAnswers function reference
   }, [initialSavedAnswers, questions, initializeAnswers]);
-  // ========================================================================
-  // *** End of Fix ***
-  // ========================================================================
 
   // --- Timer ---
   const [timeLeft, setTimeLeft] = useState(null);
 
   useEffect(() => {
     if (initialRemainingTime !== undefined && initialRemainingTime !== null) {
-      console.log("Setting timer from attempt data:", initialRemainingTime);
       setTimeLeft(initialRemainingTime);
     } else if (testData?.timeLimitMinutes) {
-      console.log(
-        "Setting timer from test data limit:",
-        testData.timeLimitMinutes
-      );
-
       // Ensure we're dealing with a number
       const minutes = Number(testData.timeLimitMinutes);
-      console.log("Converted minutes:", minutes);
 
       if (!isNaN(minutes) && minutes > 0) {
         const seconds = minutes * 60;
-        console.log("Setting timer to seconds:", seconds);
         setTimeLeft(seconds);
       } else {
-        console.log("Invalid time limit minutes:", minutes);
         setTimeLeft(null);
       }
     } else {
-      console.log("No time limit found, setting timer to null.");
       setTimeLeft(null);
     }
   }, [initialRemainingTime, testData?.timeLimitMinutes]);
   const countdown = useTimer(timeLeft !== null ? timeLeft : 0); // Pass 0 if null initially
+
+  // --- Save Progress Logic ---
+  // Use useCallback to ensure the function reference is stable
+  // Use Debounce to prevent spamming the save function if called rapidly
+  const debouncedSaveProgress = useDebouncedCallback(
+    async (reason = "auto") => {
+      if (
+        !testAttemptId ||
+        isSaving ||
+        submitting ||
+        savedStatus === "saving"
+      ) {
+        console.warn(/* ... */);
+        return;
+      }
+      if (!currentQuestionData?.testQuestionId) {
+        console.warn(/* ... */);
+        return;
+      }
+
+      setIsSaving(true);
+      setSavedStatus("saving");
+      const currentAnswersForSave = getAnswersForSubmission(questions);
+
+      // *** Correction Here: Use 'countdown' state variable ***
+      const progressData = {
+        lastViewedTestQuestionId: currentQuestionData.testQuestionId,
+        // Get the current value from the useTimer hook's state variable
+        remainingTimeSeconds: countdown, // <--- Use countdown directly
+        answers: currentAnswersForSave,
+      };
+
+      console.log("Saving progress data:", progressData);
+      try {
+        await fetchWithAuth(`/test-attempts/${testAttemptId}/save-progress`, {
+          method: "PATCH",
+          body: progressData,
+        });
+        console.log(`Progress saved successfully (${reason}).`);
+        setSavedStatus("saved");
+      } catch (error) {
+        console.error(`Error saving progress (${reason}):`, error);
+        setSavedStatus("error");
+      } finally {
+        setIsSaving(false);
+        setTimeout(() => {
+          // Check current status before resetting to idle
+          setSavedStatus((current) => (current === "saved" ? "idle" : current));
+        }, 3000);
+      }
+    },
+    500 // Debounce time
+  );
+  // --- Auto-Save Trigger: Interval ---
+  useEffect(() => {
+    if (!testAttemptId || !currentQuestionData?.testQuestionId) {
+      // Don't start interval until essential data is loaded
+      return;
+    }
+
+    console.log("Setting up auto-save interval...");
+    const intervalId = setInterval(() => {
+      // Call the debounced save function
+      debouncedSaveProgress("interval");
+    }, AUTO_SAVE_INTERVAL_MS);
+
+    // Cleanup on unmount or when attemptId/currentQuestionId changes
+    return () => {
+      console.log("Clearing auto-save interval.");
+      clearInterval(intervalId);
+      // Optionally trigger one last save on cleanup *if needed*
+      // debouncedSaveProgress.flush(); // If you want to ensure last call executes
+    };
+    // Add dependencies: debouncedSaveProgress function, attemptId, and crucially currentQuestionData
+    // This ensures the interval restarts if the attempt/question context changes,
+    // and the save function always has access to the *latest* currentQuestionData.
+  }, [debouncedSaveProgress, testAttemptId, currentQuestionData]);
+
+  // --- Auto-Save Trigger: Page Visibility Change ---
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        console.log("Page hidden, triggering save progress...");
+        // Call the debounced save function - it will save if enough time passed
+        // Or use flush() to force immediate execution if needed:
+        // debouncedSaveProgress.flush();
+        debouncedSaveProgress("visibility");
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Cleanup on unmount
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      // Optionally trigger one last save when navigating away *cleanly*
+      // Note: This might still race with component unmount/browser closing.
+      // if (testAttemptId) { // Check if we have an attempt to save for
+      //   debouncedSaveProgress.flush();
+      // }
+    };
+    // Dependency: the debounced save function itself
+  }, [debouncedSaveProgress, testAttemptId]);
 
   // --- Submission State ---
   const [submitting, setSubmitting] = useState(false);
@@ -180,13 +247,6 @@ export default function TestDetail() {
   // --- Combined Loading/Error States ---
   const isLoading = loadingInitialTestData || loadingAttempt; // Adjust if useTestTakingData removed
   const errorOccurred = initialTestDataError || attemptError; // Adjust if useTestTakingData removed
-
-  // --- Specific Handlers ---
-  const currentQuestionData = useMemo(
-    () => questions[currentQuestionIndex],
-    [questions, currentQuestionIndex]
-  );
-  const currentTestQuestionId = currentQuestionData?.testQuestionId;
 
   // Effect to notify the answers hook when the question changes
   useEffect(() => {
@@ -217,40 +277,6 @@ export default function TestDetail() {
       !completedQuestions[currentTestQuestionId]
     );
   }, [currentTestQuestionId, completedQuestions, answerHandlers]);
-
-  // --- Save and Submit Logic ---
-  const saveProgress = async () => {
-    // ... (saveProgress logic remains the same - ensure endpoint/payload match backend)
-    if (!testAttemptId || !currentTestQuestionId) {
-      console.warn("Cannot save progress: Missing attempt or question ID.");
-      answerHandlers.setSavedStatus("error");
-      return;
-    }
-    answerHandlers.setSavedStatus("saving");
-    const currentAnswersForSave = getAnswersForSubmission(questions);
-    const progressData = {
-      lastViewedTestQuestionId: currentTestQuestionId,
-      remainingTimeSeconds: countdown,
-      answers: currentAnswersForSave,
-    };
-    console.log(
-      "Saving Progress Payload:",
-      JSON.stringify(progressData, null, 2)
-    );
-    try {
-      await fetchWithAuth(`/test-attempts/${testAttemptId}/save-progress`, {
-        // Verify endpoint
-        method: "POST",
-        body: progressData,
-      });
-      console.log("Progress saved successfully.");
-      answerHandlers.setSavedStatus("saved");
-    } catch (error) {
-      console.error("Error saving progress:", error);
-      answerHandlers.setSavedStatus("error");
-      alert(`Error saving progress: ${error.message}`);
-    }
-  };
 
   const handleSubmitTest = async () => {
     // ... (handleSubmitTest logic remains the same - ensure RPC payload/endpoint match backend)
@@ -436,7 +462,6 @@ export default function TestDetail() {
               totalQuestions={totalQuestions}
               onPrevQuestion={navHandlers.handlePrevQuestion}
               onNextQuestion={navHandlers.handleNextQuestion}
-              onSaveProgress={saveProgress}
               onSubmitTest={handleSubmitTest}
               onNavigate={navHandlers.navigateToQuestion} // If needed for jump-to-end etc.
               savedStatus={savedStatus}

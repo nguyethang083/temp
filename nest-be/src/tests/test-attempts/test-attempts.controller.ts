@@ -12,10 +12,9 @@ import {
   UsePipes,
   ValidationPipe,
   Get,
+  Patch,
 } from '@nestjs/common';
 import { User } from '@supabase/supabase-js';
-import { plainToInstance } from 'class-transformer';
-import { validate } from 'class-validator';
 import { JwtGuard } from '../../auth/guards/auth.guard';
 import { TestAttemptsService, UserAttempt } from './test-attempts.service';
 import { GetUser } from '../../auth/decorators/get-user.decorator';
@@ -23,6 +22,7 @@ import {
   AnswerDto,
   SubmitTestAttemptDto,
 } from '../dto/submit-test-attempt.dto';
+import { SaveProgressDto } from '../dto/save-progress.dto';
 
 @UseGuards(JwtGuard)
 @Controller('test-attempts')
@@ -38,20 +38,6 @@ export class TestAttemptsController {
     @Body() submissionData: SubmitTestAttemptDto, // Use the validated DTO directly
     @GetUser() user: User,
   ) {
-    this.logger.log(
-      `Received VALIDATED submission for attempt ID: ${attemptId} by user ID: ${user?.id}`,
-    );
-    this.logger.log(
-      // Log the validated/transformed data
-      `Validated submission data: ${JSON.stringify(submissionData, null, 2)}`,
-    );
-
-    if (!user) {
-      this.logger.error('User object not found in request during submission.');
-      // Guard should prevent this, but double-check
-      throw new InternalServerErrorException('User authentication failed.');
-    }
-    // Call the refactored service method
     return this.testAttemptsService.submitTestAttempt(
       attemptId,
       submissionData,
@@ -82,5 +68,30 @@ export class TestAttemptsController {
     return attempts;
   }
 
-  // TODO: Add POST /test-attempts/:attemptId/save-progress endpoint here later
+  @Patch(':attemptId/save-progress')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async saveAttemptProgress(
+    @Param('attemptId', ParseUUIDPipe) attemptId: string,
+    @Body() progressData: SaveProgressDto, // Use the validated DTO
+    @GetUser() user: User,
+  ) {
+    this.logger.log(
+      `Received request to SAVE PROGRESS for attempt ID: ${attemptId} by user ID: ${user?.id}`,
+    );
+    this.logger.debug(`Save progress data: ${JSON.stringify(progressData)}`);
+
+    if (!user) {
+      this.logger.error(
+        'User object not found in request during save progress.',
+      );
+      throw new InternalServerErrorException('User authentication failed.');
+    }
+
+    // Call the service method
+    return this.testAttemptsService.saveAttemptProgress(
+      attemptId,
+      progressData,
+      user,
+    );
+  }
 }

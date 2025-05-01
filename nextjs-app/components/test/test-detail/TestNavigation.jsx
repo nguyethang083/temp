@@ -38,7 +38,6 @@ export function TestNavigation({
   onNavigate, // Function accepting 0-based index
 
   // Save/Submit state & handlers
-  onSaveProgress, // Function to save progress
   onSubmitTest, // Function to submit final test
   savedStatus, // 'saved', 'saving', 'unsaved', 'error'
   submitting, // boolean
@@ -210,30 +209,6 @@ export function TestNavigation({
             </div>
           </DialogContent>
         </Dialog>
-        {/* Save Progress Button */}
-        <Button
-          variant="outline"
-          onClick={onSaveProgress}
-          className="flex items-center gap-1 flex-1 sm:flex-none"
-          disabled={savedStatus === "saving" || submitting}
-        >
-          <Save
-            className={`h-4 w-4 ${
-              savedStatus === "saving" ? "animate-spin" : ""
-            }`}
-          />
-          {savedStatus === "saving" ? "Saving..." : "Save"}
-          {/* Optional: Show save status indicator */}
-          {savedStatus === "saved" && (
-            <span className="ml-1.5 text-xs text-green-600">(Saved)</span>
-          )}
-          {savedStatus === "unsaved" && (
-            <span className="ml-1.5 text-xs text-orange-500">(Unsaved)</span>
-          )}
-          {savedStatus === "error" && (
-            <span className="ml-1.5 text-xs text-red-500">(Error)</span>
-          )}
-        </Button>
       </div>
 
       {/* Next/Submit Button */}

@@ -1,4 +1,3 @@
-// pages/test/[testId]/index.js
 "use client";
 
 import { useState, useEffect } from "react"; // Keep useEffect if needed elsewhere, remove useState if not
@@ -21,8 +20,7 @@ export default function TestDescription() {
   const { test, attemptStatus, attempts, loading, error, attemptsError } =
     useTestDetails(id);
 
-  // Remove the local useState for attempts:
-  // const [attempts, setAttempts] = useState([]); // REMOVE THIS LINE
+  const totalScore = test?.test_questions?.[0].count ?? "N/A";
 
   const navigateToAttemptResult = (attemptId) => {
     if (!test || !test.title || !attemptId) return;
@@ -36,25 +34,11 @@ export default function TestDescription() {
 
   // --- Button Text Logic (Adjust based on statuses from backend if needed) ---
   const getButtonText = (status) => {
-    // Consider all terminal statuses ('completed', 'graded', 'timed_out')
-    const isFinished = ["completed", "graded", "timed_out"].includes(status);
-
     switch (status) {
       case "in_progress":
         return "Continue Test";
-      case "completed":
-      case "graded":
-      case "timed_out":
-        // You might want different text, e.g., "Review Latest" vs "Start Again"
-        // This depends on whether retakes are allowed and how you want the flow
-        return attempts?.length > 0 ? "Review Latest" : "Start Again"; // Example logic
-      case "not_started":
-        return "Start Test";
-      case "error": // Status check failed
-        return "Start Test"; // Allow user to try
-      case null: // Still loading status
       default:
-        return "Loading...";
+        return "Start Test";
     }
   };
 
@@ -74,15 +58,7 @@ export default function TestDescription() {
       attemptStatus
     );
 
-    // If finished and we have attempts, navigate to the latest result
-    if (isFinished && attempts?.length > 0) {
-      // The first attempt in the array is the latest (due to backend sorting)
-      navigateToAttemptResult(attempts[0].id);
-    } else {
-      // Otherwise (not started, in progress, finished but no attempts somehow, status error),
-      // go to the test detail page to let start_or_resume_test_attempt handle it
-      router.push(`/test/${slugifiedTitle}/test-detail?id=${test.id}`);
-    }
+    router.push(`/test/${slugifiedTitle}/test-detail?id=${test.id}`);
   };
 
   // --- Render Logic ---
@@ -181,6 +157,7 @@ export default function TestDescription() {
               <PreviousAttempts
                 attempts={attempts} // Pass the attempts array from the hook
                 onAttemptClick={navigateToAttemptResult}
+                totalPossibleScore={totalScore}
               />
             )}
           </div>

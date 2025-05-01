@@ -26,7 +26,7 @@ export class AnswerDto {
 
   @IsOptional()
   @IsString()
-  mcAnswer?: string | null;
+  userAnswer?: string | null;
 
   @IsOptional()
   @IsString()

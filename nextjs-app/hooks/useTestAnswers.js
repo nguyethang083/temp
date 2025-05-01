@@ -327,10 +327,6 @@ export function useTestAnswers() {
         };
       });
 
-      console.log(
-        "Generated answers for submission (RPC format with time):",
-        JSON.stringify(answersToSubmit, null, 2) // Pretty print for easier debugging
-      );
       return answersToSubmit;
     },
     // Dependencies include answer states AND the base questionTimeSpent state

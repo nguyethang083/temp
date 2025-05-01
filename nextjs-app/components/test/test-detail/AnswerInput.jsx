@@ -21,11 +21,6 @@ export function AnswerInput({
   onLongAnswerChange,
   parseLatex, // Receive the parser function as a prop
 }) {
-  console.log("--- AnswerInput Props ---");
-  console.log("questionContent:", JSON.stringify(questionContent, null, 2)); // Log the crucial content object
-  console.log("multipleChoiceAnswer:", multipleChoiceAnswer);
-  console.log("shortAnswer:", shortAnswer);
-  console.log("longAnswer:", longAnswer);
   const questionId = questionContent?.id;
 
   if (!questionContent || !questionId) {
@@ -40,11 +35,6 @@ export function AnswerInput({
       const options = Array.isArray(questionContent.options)
         ? questionContent.options
         : [];
-
-      console.log(
-        `AnswerInput Render Check: QID=${questionId}, RadioGroup value prop will be:`,
-        multipleChoiceAnswer
-      );
 
       return (
         <div className="space-y-3 mt-6">

@@ -1,18 +1,16 @@
-"use client"; // Ensure this is a Client Component
+"use client";
 
-import React from "react"; // Removed useState, useEffect
+import React from "react";
 import {
   Table,
   TableBody,
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"; // Adjust path if needed
-import TestRow from "@/components/test/TestRow"; // Adjust path if needed
-import { usePracticeTests } from "@/hooks/usePracticeTests"; // Import the custom hook (adjust path)
-import { Loader2 } from "lucide-react"; // For loading state
+} from "@/components/ui/table";
+import TestRow from "@/components/test/TestRow";
+import { usePracticeTests } from "@/hooks/usePracticeTests";
 
-// Loading Skeleton Component
 const LoadingSkeleton = () => (
   <div className="animate-pulse space-y-2 mt-4">
     <div className="h-12 bg-gray-200 rounded"></div>
@@ -23,12 +21,7 @@ const LoadingSkeleton = () => (
 );
 
 export default function PracticeTestList() {
-  // Use the custom hook to fetch practice tests
   const { tests, loading, error } = usePracticeTests();
-
-  // Removed local state and useEffect for fetching
-
-  // Removed getDifficultyColor and getStatusInfo helpers (moved/removed)
 
   return (
     <div className="mt-8">

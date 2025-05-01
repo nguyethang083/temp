@@ -114,15 +114,7 @@ export function QuestionCard({
     // Format options if needed (example assumes object format { A: 'text', ...})
     let formattedOptions = [];
     // --- Add detailed logs ---
-    console.log(
-      "useMemo: Raw questionData.questionType:",
-      questionData?.questionType
-    );
-    console.log("useMemo: Raw questionData.options:", questionData?.options);
-    console.log(
-      "useMemo: typeof questionData.options:",
-      typeof questionData?.options
-    );
+
     // --- End detailed logs ---
     if (
       questionData.questionType === "multiple_choice" &&
@@ -178,7 +170,6 @@ export function QuestionCard({
     );
   }
 
-  console.log("QuestionData for Display:", questionContentForDisplay);
   const hasDrawingArea = questionContentForDisplay.type === "drawing";
 
   return (

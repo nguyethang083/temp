@@ -1,14 +1,13 @@
-// components/test/test-description/attempts.js
 import { format } from "date-fns";
 import {
   Calendar,
   Clock,
   CheckCircle,
-  XCircle, // Keep XCircle for the failed status
+  XCircle,
   Award,
   Hourglass,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -17,9 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge"; // Keep Badge for other statuses
+import { Badge } from "@/components/ui/badge";
 
-// --- Helper function to format duration in seconds (Remains the same) ---
+// --- Helper function to format duration in seconds ---
 function formatDurationFromSeconds(totalSeconds) {
   if (totalSeconds === null || totalSeconds === undefined || totalSeconds < 0) {
     return "N/A";
@@ -38,7 +37,6 @@ function formatDurationFromSeconds(totalSeconds) {
   return parts.join(" ");
 }
 
-// --- Status Display Component (Modified) ---
 function AttemptStatus({ status, passed }) {
   const normalizedStatus = status?.toLowerCase();
 
@@ -86,7 +84,6 @@ function AttemptStatus({ status, passed }) {
       );
     case "timed_out":
       if (passed === true) {
-        // Keep Badge for Passed (Timed Out)
         return (
           <Badge
             variant="default"
@@ -96,7 +93,6 @@ function AttemptStatus({ status, passed }) {
           </Badge>
         );
       } else if (passed === false) {
-        // *** USE OLD STYLE FOR FAILED (Timed Out) ***
         return (
           <div className="flex items-center justify-center text-red-600">
             {" "}
@@ -107,7 +103,6 @@ function AttemptStatus({ status, passed }) {
           </div>
         );
       } else {
-        // Keep Badge for Timed Out (unknown pass/fail)
         return (
           <Badge
             variant="secondary"
@@ -118,13 +113,15 @@ function AttemptStatus({ status, passed }) {
         );
       }
     default:
-      // Fallback for any other statuses
       return <Badge variant="secondary">{status || "Unknown"}</Badge>;
   }
 }
 
-// --- Main PreviousAttempts Component (Structure remains the same) ---
-export default function PreviousAttempts({ attempts = [], onAttemptClick }) {
+export default function PreviousAttempts({
+  attempts = [],
+  onAttemptClick,
+  totalPossibleScore,
+}) {
   return (
     <div className="mb-8">
       {/* Optional: Remove explicit h2 if CardHeader/CardTitle is sufficient */}
@@ -149,6 +146,14 @@ export default function PreviousAttempts({ attempts = [], onAttemptClick }) {
               <TableBody>
                 {attempts.map((attempt) => {
                   const isClickable = attempt.status !== "in_progress";
+                  const canCalculatePercentage =
+                    attempt.status !== "in_progress" &&
+                    attempt.score !== null &&
+                    typeof attempt.score === "number" && // Ensure score is a number
+                    totalPossibleScore !== null &&
+                    totalPossibleScore !== undefined &&
+                    typeof totalPossibleScore === "number" && // Ensure total is a number
+                    totalPossibleScore > 0; // Avoid division by zero
                   return (
                     <TableRow
                       key={attempt.id}
@@ -182,14 +187,25 @@ export default function PreviousAttempts({ attempts = [], onAttemptClick }) {
                       </TableCell>
                       {/* Score Cell */}
                       <TableCell className="py-3 px-4 text-center">
-                        {attempt.status !== "in_progress" &&
-                        attempt.score !== null ? (
-                          <span className="font-medium">{attempt.score}</span>
+                        {canCalculatePercentage ? (
+                          <span className="font-medium">
+                            {/* Calculate and format percentage (e.g., 85.0%) */}
+                            {`${(
+                              (attempt.score / totalPossibleScore) *
+                              10
+                            ).toFixed(1)}`}
+                            {/* Optional: Show raw score as well */}
+                            {/* <span className="text-xs text-gray-500 ml-1">
+                ({attempt.score}/{totalPossibleScore})
+              </span> */}
+                          </span>
                         ) : attempt.status === "in_progress" ? (
+                          // Fallback for 'in_progress'
                           <span className="text-gray-500 italic text-xs">
                             Pending
                           </span>
                         ) : (
+                          // Fallback for N/A (score is null, totalPossibleScore missing, etc.)
                           <span className="text-gray-500 text-xs">N/A</span>
                         )}
                       </TableCell>
