@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import AuthLayout from "../../components/AuthLayout";
-import { Eye, EyeOff } from "react-feather";
+import { Eye, EyeOff, ArrowLeft } from "react-feather";
 import { FcGoogle } from "react-icons/fc";
 import { useAuth } from "../../context/AuthContext";
 import { supabase } from "../../lib/supabaseClient";
@@ -16,8 +16,10 @@ const SignUp = () => {
     ageOrLevel: "",
     email: "",
     password: "",
+    confirmPassword: ""
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [signupLoading, setSignupLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -38,6 +40,12 @@ const SignUp = () => {
       setError("You must agree to the terms of service to continue");
       return;
     }
+    
+    // Check if passwords match
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
 
     try {
       setSignupLoading(true);
@@ -54,6 +62,7 @@ const SignUp = () => {
             age_level: formData.ageOrLevel,
             full_name: `${formData.firstName} ${formData.lastName}`,
           },
+          emailRedirectTo: `${window.location.origin}/auth/verify-email?type=signup`,
         },
       });
 
@@ -61,6 +70,9 @@ const SignUp = () => {
         throw new Error(error.message);
       }
 
+      // Store email in localStorage for the verify page
+      localStorage.setItem('userEmail', formData.email);
+      
       // Redirect to email verification page
       router.push("/auth/verify-email");
     } catch (err) {
@@ -79,7 +91,8 @@ const SignUp = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/dashboard`,
+          redirectTo: `${window.location.origin}/auth/verify-email?type=signup`,
+          scopes: 'profile email',
         },
       });
 
@@ -100,7 +113,7 @@ const SignUp = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "apple",
         options: {
-          redirectTo: `${window.location.origin}/dashboard`,
+          redirectTo: `${window.location.origin}/auth/verify-email?type=signup`,
         },
       });
 
@@ -114,6 +127,15 @@ const SignUp = () => {
 
   return (
     <AuthLayout title="Sign Up - 1">
+      {/* Back to Home Link */}
+      <Link 
+        href="/" 
+        className="inline-flex items-center text-gray-500 hover:text-gray-700 mb-6 transition-colors"
+      >
+        <ArrowLeft size={16} className="mr-1" />
+        <span>Back to Home</span>
+      </Link>
+
       <h1 className="text-3xl font-semibold mb-2">Create account</h1>
       <p className="text-gray-600 mb-6">
         Already have an account?{" "}
@@ -197,6 +219,25 @@ const SignUp = () => {
             onClick={() => setShowPassword(!showPassword)}
           >
             {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+        </div>
+
+        <div className="mb-4 relative">
+          <input
+            type={showConfirmPassword ? "text" : "password"}
+            name="confirmPassword"
+            placeholder="Confirm Password"
+            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            required
+          />
+          <button
+            type="button"
+            className="absolute right-3 top-3 text-gray-400"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+          >
+            {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
         </div>
 

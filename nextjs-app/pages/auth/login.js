@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import AuthLayout from "../../components/AuthLayout";
-import { Eye, EyeOff } from "react-feather";
+import { Eye, EyeOff, ArrowLeft } from "react-feather";
 import { FcGoogle } from "react-icons/fc";
 import { useAuth } from "../../context/AuthContext";
 import { signIn } from "next-auth/react";
@@ -105,6 +105,10 @@ const Login = () => {
     try {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+          scopes: 'profile email',
+        }
       });
 
       if (oauthError) {
@@ -133,6 +137,9 @@ const Login = () => {
     try {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "apple",
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+        }
       });
 
       if (oauthError) {
@@ -147,6 +154,15 @@ const Login = () => {
 
   return (
     <AuthLayout title="Login">
+      {/* Back to Home Link */}
+      <Link 
+        href="/" 
+        className="inline-flex items-center text-gray-500 hover:text-gray-700 mb-6 transition-colors"
+      >
+        <ArrowLeft size={16} className="mr-1" />
+        <span>Back to Home</span>
+      </Link>
+
       <h1 className="text-3xl font-semibold mb-2">Welcome Back</h1>
       <p className="text-gray-600 mb-6">
         Don't have an account?{" "}

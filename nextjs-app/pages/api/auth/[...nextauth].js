@@ -58,6 +58,7 @@ export default NextAuth({
               email: user.email,
               name: userName,
               image: userImage,
+              supabaseAccessToken: credentials.accessToken,
             };
           }
           return null;
@@ -75,6 +76,9 @@ export default NextAuth({
         token.email = user.email;
         token.name = user.name;
         token.picture = user.image;
+        if (user.supabaseAccessToken) {
+          token.supabaseAccessToken = user.supabaseAccessToken;
+        }
       }
       return token;
     },
@@ -85,6 +89,9 @@ export default NextAuth({
         session.user.email = token.email;
         session.user.name = token.name;
         session.user.image = token.picture;
+        if (token.supabaseAccessToken) {
+          session.supabaseAccessToken = token.supabaseAccessToken;
+        }
       } else {
         console.error("Session callback - No token or user present.");
       }
@@ -92,22 +99,26 @@ export default NextAuth({
     },
 
     async redirect({ url, baseUrl }) {
-      if (url.startsWith("/")) {
-        const redirectUrl = `${baseUrl}${url}`;
-        return redirectUrl;
-      }
-
-      const parsedUrl = new URL(url);
-      if (parsedUrl.origin === baseUrl) {
-        if (parsedUrl.pathname === "/" || parsedUrl.pathname === "") {
-          const dashboardUrl = `${baseUrl}/dashboard`;
-          return dashboardUrl;
-        }
+      if (url.includes('type=recovery') || url.includes('type=signup') || 
+          url.includes('type=email_confirmation')) {
         return url;
       }
-
-      const defaultRedirectUrl = `${baseUrl}/dashboard`;
-      return defaultRedirectUrl;
+      
+      if (url.startsWith(baseUrl)) {
+        const urlObj = new URL(url);
+        
+        if (urlObj.pathname === "/" || urlObj.pathname === "") {
+          return `${baseUrl}/dashboard`;
+        }
+        
+        return url;
+      }
+      
+      if (url.startsWith('/')) {
+        return `${baseUrl}${url}`;
+      }
+      
+      return `${baseUrl}/dashboard`;
     },
   },
   pages: {

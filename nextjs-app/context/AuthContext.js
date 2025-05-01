@@ -123,6 +123,25 @@ export const AuthProvider = ({ children }) => {
           );
 
           try {
+            // Lấy avatar và thông tin người dùng từ OAuth provider
+            const user = currentSession.user;
+            
+            // Nếu là Google và có avatar, cập nhật vào metadata của người dùng
+            if (provider === 'google') {
+              const avatar_url = user.user_metadata?.avatar_url;
+              const full_name = user.user_metadata?.full_name;
+              
+              if (avatar_url || full_name) {
+                // Cập nhật metadata của user để lưu avatar URL
+                await supabase.auth.updateUser({
+                  data: { 
+                    avatar_url: avatar_url || user.user_metadata?.picture,
+                    full_name: full_name || user.user_metadata?.name
+                  }
+                });
+              }
+            }
+
             // Call NextAuth's signIn function with the 'credentials' provider,
             // passing the Supabase access token. This triggers the authorize callback
             // in [...nextauth].js to verify the token and create a NextAuth session.

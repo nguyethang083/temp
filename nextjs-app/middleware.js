@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 export async function middleware(req) {
-  const { pathname } = req.nextUrl;
+  const { pathname, searchParams } = req.nextUrl;
 
   // Get the NextAuth token
   // Ensure NEXTAUTH_SECRET is set in your environment variables
@@ -12,9 +12,20 @@ export async function middleware(req) {
   const isAuthenticated = !!token;
 
   // Define public paths (accessible without login)
-  const publicPaths = ["/auth/login", "/auth/signup", "/auth/error", "/"]; // Add other public paths if any
+  const publicPaths = [
+    "/auth/login", 
+    "/auth/signup", 
+    "/auth/error",
+    "/auth/verify-email",
+    "/auth/forgot-password",
+    "/auth/reset-password",
+    "/auth/check-email",
+    "/"
+  ]; 
+  
   // Define auth paths (login/signup pages)
   const authPaths = ["/auth/login", "/auth/signup"];
+  
   // Define protected paths
   const protectedPaths = [
     "/dashboard",
@@ -31,6 +42,10 @@ export async function middleware(req) {
   );
   // Check if the current path is an auth page
   const isAuthPath = authPaths.some((path) => pathname.startsWith(path));
+  
+  // Special case for email verification with type param
+  const isEmailVerificationCallback = pathname.startsWith("/auth/verify-email") && 
+    (searchParams.get("type") === "signup" || searchParams.get("type") === "email_confirmation");
 
   // --- Redirect Logic ---
 
@@ -44,6 +59,11 @@ export async function middleware(req) {
   }
   // If user is NOT authenticated
   else {
+    // Skip auth middleware for email verification callback
+    if (isEmailVerificationCallback) {
+      return NextResponse.next();
+    }
+    
     // If trying to access a protected page, redirect to login
     if (isProtectedRoute) {
       // Store the intended destination to redirect back after login (optional)

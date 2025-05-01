@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import AuthLayout from '../../components/AuthLayout';
-import { parseCookies } from 'nookies';
+import { supabase } from '@/lib/supabaseClient';
+import { ArrowLeft } from 'react-feather';
 
 const VerifyEmail = () => {
   const router = useRouter();
@@ -12,48 +14,46 @@ const VerifyEmail = () => {
   const [error, setError] = useState('');
   
   useEffect(() => {
-    // Get email from cookies if available
-    const cookies = parseCookies();
-    if (cookies.userEmail) {
-      setEmail(cookies.userEmail);
+    // Get email from localStorage if available
+    const userEmail = localStorage.getItem('userEmail');
+    if (userEmail) {
+      setEmail(userEmail);
     }
     
-    // Check if there's a token in the URL for verification
-    const { token } = router.query;
-    if (token) {
-      verifyEmailWithToken(token);
+    // Check if this is a verification callback from Supabase
+    const { type } = router.query;
+    
+    if (type === 'signup' || type === 'email_confirmation') {
+      handleSupabaseEmailVerification();
     }
   }, [router.query]);
   
-  const verifyEmailWithToken = async (token) => {
+  const handleSupabaseEmailVerification = async () => {
     try {
       setVerifying(true);
       setError('');
       
-      // Call API to verify email with token
-      const response = await fetch('/api/auth/verify-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ token })
-      });
+      // Check if the user is verified by getting the session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to verify email');
+      if (sessionError) {
+        throw new Error(sessionError.message || 'Failed to check verification status');
       }
       
-      // Email verified successfully
-      setVerified(true);
-      
-      // Redirect to login page after 3 seconds
-      setTimeout(() => {
-        router.push('/auth/login');
-      }, 3000);
-      
+      if (session?.user?.email_confirmed_at) {
+        // Email is verified
+        setVerified(true);
+        
+        // Redirect to login page after 3 seconds
+        setTimeout(() => {
+          router.push('/auth/login');
+        }, 3000);
+      } else {
+        // Not verified yet
+        throw new Error('Email verification not completed. Please check your email and click the verification link.');
+      }
     } catch (err) {
+      console.error('Verification error:', err);
       setError(err.message || 'An error occurred during email verification');
     } finally {
       setVerifying(false);
@@ -65,23 +65,25 @@ const VerifyEmail = () => {
       setLoading(true);
       setError('');
       
-      // Call to Frappe backend to resend verification email
-      const response = await fetch('/api/auth/resend-verification', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email })
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to resend verification email');
+      if (!email) {
+        throw new Error('Email address is required');
       }
       
-      // Show success message or update UI
-      alert('Verification email has been resent');
+      // Use Supabase to resend verification email
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/verify-email?type=signup`
+        }
+      });
+      
+      if (error) {
+        throw new Error(error.message || 'Failed to resend verification email');
+      }
+      
+      // Show success message
+      alert('Verification email has been resent. Please check your inbox.');
       
     } catch (err) {
       setError(err.message || 'An error occurred when resending the email');
@@ -100,6 +102,17 @@ const VerifyEmail = () => {
   
   return (
     <AuthLayout title="Email Verification">
+      {/* Back to Home Link */}
+      {!verified && (
+        <Link 
+          href="/" 
+          className="inline-flex items-center text-gray-500 hover:text-gray-700 mb-6 transition-colors"
+        >
+          <ArrowLeft size={16} className="mr-1" />
+          <span>Back to Home</span>
+        </Link>
+      )}
+      
       {verifying ? (
         <div className="text-center">
           <h1 className="text-3xl font-semibold mb-4">Verifying your email...</h1>
