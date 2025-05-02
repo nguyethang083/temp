@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsUUID, IsEnum, IsInt } from 'class-validator';
 
 export enum TestTypeEnum {
   Exam = 'Exam',
@@ -8,7 +8,7 @@ export enum TestTypeEnum {
 
 export class FindAllTestsQueryDto {
   @IsOptional()
-  @IsUUID() // Validate that it's a UUID if provided
+  // @IsInt()
   topicId?: string;
 
   @IsOptional()

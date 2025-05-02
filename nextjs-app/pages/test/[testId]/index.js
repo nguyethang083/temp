@@ -108,11 +108,11 @@ export default function TestDescription() {
     <div className="container mx-auto p-4 md:p-6">
       <div className="mb-6">
         <Link
-          href="/test?mode=practice-test" // Adjust as necessary
+          href="/test" // Adjust as necessary
           className="inline-flex items-center text-blue-600 hover:text-blue-800"
         >
           <ArrowLeft className="h-4 w-4 mr-1" />
-          Back to Practice Tests
+          Back to Test
         </Link>
       </div>
 
@@ -127,7 +127,9 @@ export default function TestDescription() {
             <div
               className="prose dark:prose-invert max-w-none" // Apply prose styling
               dangerouslySetInnerHTML={{
-                __html: test.instructions || "No description provided.",
+                __html:
+                  test.instructions ||
+                  "Chọn một đáp án đúng duy nhất. Mỗi câu 1 điểm. Chọn sai không bị trừ điểm.",
               }}
             />
           </div>

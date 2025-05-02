@@ -20,13 +20,27 @@ const LoadingSkeleton = () => (
   </div>
 );
 
-export default function PracticeTestList() {
-  const { tests, loading, error } = usePracticeTests();
+export default function PracticeTestList({
+  selectedTopicId,
+  selectedTopicName,
+  selectedGrade,
+}) {
+  const { tests, loading, error } = usePracticeTests({
+    topicId: selectedTopicId,
+    gradeLevel: selectedGrade,
+  });
+
+  console.log("Tests fetched:", tests);
 
   return (
     <div className="mt-8">
-      <h3 className="text-xl font-bold mb-4">Practice Tests</h3>
-
+      <h3 className="text-xl font-bold mb-4">
+        {selectedTopicId && selectedTopicName
+          ? `${selectedTopicName}`
+          : selectedTopicId
+          ? `Practice Tests for Selected Topic` // Fallback if name is missing but ID exists
+          : "All Practice Tests"}
+      </h3>
       {/* Loading State */}
       {loading && <LoadingSkeleton />}
 

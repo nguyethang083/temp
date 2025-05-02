@@ -6,7 +6,7 @@ import { Pagination } from "@/components/test/pagination"; // Adjust path if nee
 import { useTopics } from "@/hooks/useTopics"; // Import the custom hook (adjust path)
 import TopicItem from "@/pages/test/TopicItem"; // Adjust path if needed
 
-export default function TopicsSection() {
+export default function TopicsSection({ onTopicSelect }) {
   // Use the custom hook to get topics, loading state, and error state
   const { topics, loading, error } = useTopics();
 
@@ -57,7 +57,11 @@ export default function TopicsSection() {
         <div className="space-y-4">
           {currentTopics.map((topic) => (
             // Pass the full topic object (including color) as a prop
-            <TopicItem key={topic.id} topic={topic} />
+            <TopicItem
+              key={topic.id}
+              topic={topic}
+              onTopicSelect={onTopicSelect}
+            />
           ))}
         </div>
       )}

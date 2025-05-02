@@ -13,22 +13,67 @@ import { ChevronDown } from "lucide-react";
 import TopicsSection from "@/components/test/topics-section";
 import PracticeTestList from "@/components/test/practice-test-list";
 import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/router";
+import { useTopics } from "@/hooks/useTopics";
 
 export default function PerformanceSection({ userData }) {
-  const searchParams = useSearchParams();
-  const modeFromUrl = searchParams.get("mode");
-
+  const router = useRouter();
+  const { mode: modeFromUrl, topicId: topicIdFromUrl } = router.query;
   const [selectedGrade, setSelectedGrade] = useState("9");
-  const [selectedMode, setSelectedMode] = useState("");
+  const [selectedMode, setSelectedMode] = useState("Topics");
   const [showModeDropdown, setShowModeDropdown] = useState(false);
   const [mathLevel, setMathLevel] = useState(userData.mathLevel);
+  const [selectedTopicId, setSelectedTopicId] = useState(null);
+  const [selectedTopicName, setSelectedTopicName] = useState(null);
+
+  // Add a new state to track whether to show tests for a topic
+  const [showTopicTests, setShowTopicTests] = useState(false);
+
+  const {
+    topics: allTopics,
+    loading: loadingTopics,
+    error: topicsError,
+  } = useTopics();
+
+  useEffect(() => {
+    // If we have a selected topic ID but no name, try to find the name in topics
+    if (
+      selectedTopicId &&
+      !selectedTopicName &&
+      allTopics &&
+      allTopics.length > 0
+    ) {
+      const selectedTopic = allTopics.find((t) => t.id === selectedTopicId);
+      if (selectedTopic) {
+        setSelectedTopicName(selectedTopic.name);
+        console.log(
+          "Setting topic name from loaded topics:",
+          selectedTopic.name
+        );
+      }
+    }
+  }, [selectedTopicId, selectedTopicName, allTopics]);
 
   // Set the mode from URL parameter if available
   useEffect(() => {
     if (modeFromUrl === "practice-test") {
-      setSelectedMode("Practice Test");
+      // Don't change selectedMode, just set the flag to show tests
+      setShowTopicTests(true);
+
+      // If there's a topicId, set it
+      if (topicIdFromUrl) {
+        setSelectedTopicId(topicIdFromUrl);
+
+        // Find the topic name in the loaded topics
+        if (allTopics && allTopics.length > 0) {
+          const selectedTopic = allTopics.find((t) => t.id === topicIdFromUrl);
+          if (selectedTopic) {
+            setSelectedTopicName(selectedTopic.name);
+          }
+        }
+      }
     }
-  }, [modeFromUrl]);
+  }, [modeFromUrl, topicIdFromUrl, allTopics]);
 
   // Simulate loading data
   useEffect(() => {
@@ -44,15 +89,31 @@ export default function PerformanceSection({ userData }) {
   const handleModeSelect = (mode) => {
     setSelectedMode(mode);
     setShowModeDropdown(false);
-    // Here you would apply the selected mode
+
+    // If switching to a mode other than "Topics", clear topic selection
+    if (mode !== "Topics") {
+      setShowTopicTests(false);
+      setSelectedTopicId(null);
+      setSelectedTopicName(null);
+    }
+
     console.log("Mode selected:", mode);
   };
 
-  const testModes = [
-    "Practice Test",
-    "Full Exam Simulation",
-    "Topic - Specific Test",
-  ];
+  // Update topic selection to set the flag but not change the mode
+  const handleTopicSelect = (topic) => {
+    if (!topic || !topic.id) return;
+    console.log("Topic selected:", topic);
+
+    setSelectedTopicId(topic.id);
+    setSelectedTopicName(topic.name);
+    setShowTopicTests(true); // Set flag to show tests instead of changing mode
+
+    const newPath = `/test?mode=practice-test&topicId=${topic.id}`;
+    router.push(newPath, undefined, { shallow: true });
+  };
+
+  const testModes = ["Practice Test", "Full Exam Simulation", "Topics"];
 
   return (
     <div className="mb-8">
@@ -125,11 +186,28 @@ export default function PerformanceSection({ userData }) {
       </div>
 
       {/* Conditionally render content based on selected mode */}
-      {selectedMode === "Practice Test" ? (
-        <PracticeTestList />
-      ) : (
-        <TopicsSection />
-      )}
+      <div className="mt-8">
+        {selectedMode === "Practice Test" ||
+        (selectedMode === "Topics" && showTopicTests) ? (
+          <PracticeTestList
+            selectedTopicId={selectedTopicId}
+            selectedTopicName={selectedTopicName}
+            selectedGrade={selectedGrade}
+          />
+        ) : selectedMode === "Topics" ? (
+          <TopicsSection
+            topics={allTopics}
+            loading={loadingTopics}
+            error={topicsError}
+            onTopicSelect={handleTopicSelect}
+            selectedGrade={selectedGrade}
+          />
+        ) : (
+          <div className="text-center p-8 text-gray-500 dark:text-gray-400 border rounded-lg bg-gray-50 dark:bg-gray-800/50 mt-6">
+            {selectedMode} mode content will be shown here.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

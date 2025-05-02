@@ -49,7 +49,7 @@ export class TopicsService {
         .from('topics')
         .select('*')
         .eq('is_active', true) // Keep the filter for active topics
-        .order('order', { ascending: true, nullsLast: true });
+        .order('id', { ascending: true, nullsLast: true });
       // `nullsLast: true` places topics without an order value at the end
 
       if (error) {

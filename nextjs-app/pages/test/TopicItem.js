@@ -1,21 +1,15 @@
 import React from "react";
 import { Button } from "@/components/ui/button"; // Assuming shadcn/ui Button
 import { ChevronRight } from "lucide-react";
-import { useRouter } from "next/navigation"; // Use next/navigation for App Router if applicable, else next/router
 
-/**
- * Renders a single topic card.
- * @param {{ topic: object }} props - Component props.
- * @param {object} props.topic - The topic object (including id, name, description, color).
- */
-export default function TopicItem({ topic }) {
-  const router = useRouter(); // Initialize router if needed for navigation
-
-  // Handle button click to navigate (example)
+export default function TopicItem({ topic, onTopicSelect }) {
+  // Handle button click to navigate
   const handleSeeTestsClick = () => {
-    // Example navigation: route to a page displaying tests for this topic
-    // Adjust the route as per your application structure
-    router.push(`/tests?topicId=${topic.id}`);
+    if (topic && onTopicSelect) {
+      onTopicSelect(topic);
+    } else {
+      console.error("Missing topic data or onTopicSelect handler");
+    }
   };
 
   if (!topic) return null; // Return null if no topic data provided

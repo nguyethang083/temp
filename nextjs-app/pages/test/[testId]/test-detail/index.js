@@ -96,7 +96,7 @@ export default function TestDetail() {
   const { initializeAnswers } = answerHandlers;
   const { setSavedStatus } = answerHandlers;
   const { handleQuestionChange } = answerHandlers;
-  const AUTO_SAVE_INTERVAL_MS = 30000; // Save every 30 seconds
+  const AUTO_SAVE_INTERVAL_MS = 10000;
   const [isSaving, setIsSaving] = useState(false);
 
   const currentQuestionData = useMemo(
@@ -329,16 +329,6 @@ export default function TestDetail() {
     }
   };
 
-  // --- Render Logic ---
-  if (isLoading)
-    return (
-      <LoadingScreen
-        message={
-          loadingAttempt ? "Starting test attempt..." : "Loading test data..."
-        } // Adjust message
-      />
-    );
-
   if (errorOccurred)
     return (
       <ErrorScreen error={errorOccurred} onRetry={() => router.reload()} />
@@ -354,14 +344,14 @@ export default function TestDetail() {
     );
   }
 
-  // Check for consistent test data AFTER attempt data should be loaded
-  if (!testData || !Array.isArray(questions) || questions.length === 0)
-    return <NoTestDataScreen />;
+  // // Check for consistent test data AFTER attempt data should be loaded
+  // if (!testData || !Array.isArray(questions) || questions.length === 0)
+  //   return <NoTestDataScreen />;
 
   // Ensure testAttemptId is loaded before rendering main UI
   if (!testAttemptId) {
     // This state might be brief if attemptStartData loads quickly
-    return <LoadingScreen message="Initializing attempt..." />;
+    return <LoadingScreen />;
   }
 
   // Get current question AFTER checking questions array has loaded
@@ -468,6 +458,7 @@ export default function TestDetail() {
               completedQuestions={completedQuestions} // Pass for display/logic
               markedForReview={markedForReview} // Pass for display/logic
               questions={questions} // Pass for display/logic
+              testId={testId} // Pass for display/logic
             />
           </div>
         </div>

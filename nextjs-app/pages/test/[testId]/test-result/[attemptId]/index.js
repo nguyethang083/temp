@@ -217,6 +217,52 @@ export default function TestResultsPage() {
     testResult.attempt?.time_taken_seconds
   );
 
+  // Inside your component, update the breadcrumbs:
+  const breadcrumbs = [
+    {
+      label: "Tests",
+      href: "/test",
+    },
+    {
+      label: testResult?.test?.title || "Test",
+      href: getTestDescriptionUrl(), // Use a function to get the correct URL
+    },
+    {
+      label: "Result", // Current page - no href needed
+    },
+  ];
+
+  // Add this helper function to build the URL correctly:
+  function getTestDescriptionUrl() {
+    // In the test result URL, the testId/slug is the 2nd part of the path
+    // Format: /test/[testId]/test-result/[attemptId]
+    const pathParts = router.asPath.split("/");
+    const testSlug = pathParts[2];
+
+    // If there's a test object in the result, use its slug if available
+    const testSlugFromData = testResult?.test?.slug;
+
+    // Determine which slug to use (prefer from data if available)
+    const finalSlug = testSlugFromData || testSlug || testId;
+
+    // Extract the test UUID from result data if available
+    const testUUIDFromData = testResult?.test?.id;
+
+    // Extract the ID from the query parameter if available, or use the one from data
+    const testUUID = router.query.id || testUUIDFromData;
+
+    if (finalSlug && testUUID) {
+      // Return URL with both slug and ID
+      return `/test/${finalSlug}?id=${testUUID}`;
+    } else if (finalSlug) {
+      // Return URL with just the slug
+      return `/test/${finalSlug}`;
+    } else {
+      // Fallback if we can't determine the URL
+      return `/test/${testId || router.query.testId}`;
+    }
+  }
+
   // --- Main Return JSX ---
   return (
     <div className="p-6">
@@ -226,7 +272,7 @@ export default function TestResultsPage() {
           title={testResult.test?.title}
           status={testResult.attempt?.status}
           passed={testResult.attempt?.passed}
-          // breadcrumbs={...} // Add breadcrumbs if available in testResult
+          breadcrumbs={breadcrumbs}
         />
         <div className="flex items-center space-x-2 mt-4 md:mt-0">
           <div className="relative">

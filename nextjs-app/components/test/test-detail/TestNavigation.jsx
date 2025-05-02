@@ -14,6 +14,7 @@ import {
   DialogClose, // Import DialogClose
 } from "@/components/ui/dialog";
 import { ChevronLeft, ChevronRight, Save, BarChart2 } from "lucide-react";
+import { useRouter } from "next/router";
 
 // Dummy implementations if not imported from utils
 const getQuestionStatusClass = (questionId, marked, completed) => {
@@ -48,7 +49,8 @@ export function TestNavigation({
   questions = [], // Pass the questions array { id: string, ... }
 
   // Styling
-  buttonColor, // Optional override color class
+  buttonColor, // Optional override color class,
+  testId,
 }) {
   // Set default button color if not provided
   const defaultColor = "bg-indigo-600";
@@ -64,6 +66,30 @@ export function TestNavigation({
 
   // Display question number (1-based)
   const currentDisplayNumber = currentQuestionIndex + 1;
+  const router = useRouter();
+
+  const handleReturnToTest = () => {
+    const { query } = router;
+
+    // Extract the test slug from the current URL path
+    // Current URL path is like: /test/trac-nghiem-cuoi-chuong-ii/test-detail
+    const pathParts = router.asPath.split("/");
+    const testSlug = pathParts[2]; // This should get the slug from the URL
+
+    // Extract the ID from the query parameter if available
+    const testUUID = query.id || testId;
+
+    if (testSlug && testUUID) {
+      // Navigate to the test description page with both slug and ID
+      router.push(`/test/${testSlug}?id=${testUUID}`);
+    } else if (testSlug) {
+      // Navigate with just the slug if that's all we have
+      router.push(`/test/${testSlug}`);
+    } else {
+      // Fallback to the previous page if we don't have enough info
+      router.back();
+    }
+  };
 
   // Handler for navigating from summary modal
   const handleNavigateFromSummary = (index) => {
@@ -197,7 +223,9 @@ export function TestNavigation({
             {/* Modal Footer Buttons */}
             <div className="flex justify-end gap-2 mt-6">
               <DialogClose asChild>
-                <Button variant="outline">Return to Test</Button>
+                <Button variant="outline" onClick={handleReturnToTest}>
+                  Return to Test
+                </Button>
               </DialogClose>
               <Button
                 className="bg-green-600 hover:bg-green-700 text-white"
