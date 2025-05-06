@@ -31,6 +31,9 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(3005);
+  // Use PORT environment variable if available (for Render compatibility)
+  const port = process.env.PORT || 3005;
+  await app.listen(port);
+  console.log(`Application is running on port: ${port}`);
 }
 bootstrap();

@@ -1,0 +1,61 @@
+services:
+  # Backend service
+  - type: web
+    name: elearning-api
+    runtime: node
+    rootDir: nest-be
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        fromService:
+          name: elearning-frontend
+          type: web
+          property: url
+      # Secret environment variables (to be set manually in Render dashboard)
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+
+  # Frontend service
+  - type: web
+    name: elearning-frontend
+    runtime: node
+    rootDir: nextjs-app
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_BACKEND_URL
+        fromService:
+          name: elearning-api
+          type: web
+          property: url
+      - key: NEXTAUTH_URL
+        fromService:
+          name: elearning-frontend
+          type: web
+          property: url
+      # Secret environment variables (to be set manually in Render dashboard)
+      - key: NEXTAUTH_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: EMAIL_SERVER_PASSWORD
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false 
