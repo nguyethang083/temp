@@ -12,10 +12,7 @@ services:
       - key: PORT
         value: 10000
       - key: FRONTEND_URL
-        fromService:
-          name: elearning-frontend
-          type: web
-          property: url
+        value: https://elearning-frontend.onrender.com
       # Secret environment variables (to be set manually in Render dashboard)
       - key: SUPABASE_URL
         sync: false
@@ -35,15 +32,9 @@ services:
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_BACKEND_URL
-        fromService:
-          name: elearning-api
-          type: web
-          property: url
+        value: https://elearning-api.onrender.com
       - key: NEXTAUTH_URL
-        fromService:
-          name: elearning-frontend
-          type: web
-          property: url
+        value: https://elearning-frontend.onrender.com
       # Secret environment variables (to be set manually in Render dashboard)
       - key: NEXTAUTH_SECRET
         sync: false
