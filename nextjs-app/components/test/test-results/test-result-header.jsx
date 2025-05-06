@@ -1,4 +1,3 @@
-// components/test/test-results/test-result-header.js
 "use client";
 
 import Link from "next/link";

@@ -16,7 +16,7 @@ export function useTestNavigation(totalQuestions, initialQuestionIndex = 0) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(() =>
     validateIndex(initialQuestionIndex, totalQuestions)
   );
-  const [showQuestionNav, setShowQuestionNav] = useState(true); // Keep default as true or false based on your preference
+  const [showQuestionNav, setShowQuestionNav] = useState(false); // Keep default as true or false based on your preference
 
   // Update current index if initialQuestionIndex or totalQuestions change AFTER initial mount
   // This might happen if initial data loads asynchronously after the hook is first called.

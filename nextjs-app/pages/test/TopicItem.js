@@ -1,5 +1,5 @@
 import React from "react";
-import { Button } from "@/components/ui/button"; // Assuming shadcn/ui Button
+import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 
 export default function TopicItem({ topic, onTopicSelect }) {
@@ -12,7 +12,7 @@ export default function TopicItem({ topic, onTopicSelect }) {
     }
   };
 
-  if (!topic) return null; // Return null if no topic data provided
+  if (!topic) return null;
 
   return (
     <div
